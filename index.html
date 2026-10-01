@@ -4,6 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Калькулятор упаковки</title>
+<link rel="manifest" href="./manifest.json">
+<meta name="theme-color" content="#1F4E78">
+<link rel="apple-touch-icon" href="./icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Упаковка">
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
@@ -398,6 +404,10 @@
     <h2 id="pageTitle">Продукт в короб</h2>
     <div class="spacer"></div>
     <button class="attach-btn" id="attachBtn" onclick="openAttachDialog()">📎 Прикрепить к проекту</button>
+    <button class="attach-btn" id="installBtn" onclick="installPWA()"
+            style="display:none; background:#27ae60; color:#fff; border-color:#27ae60;">
+      ⬇ Установить
+    </button>
     <div class="status-badge" id="topStatus">Готово</div>
   </header>
 
@@ -4253,6 +4263,57 @@ function switchPage(pageId) {
   if (page) page.classList.add('active');
   document.getElementById('pageTitle').textContent = pageTitles[pageId] || '';
   updateAttachButtonState();
+}
+
+// ============================================================
+// PWA: Service Worker + кнопка «Установить»
+// ============================================================
+let deferredInstallPrompt = null;
+
+// Регистрация Service Worker
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js')
+      .then(reg => console.log('SW зарегистрирован:', reg.scope))
+      .catch(err => console.warn('SW не зарегистрирован:', err));
+  });
+}
+
+// Ловим событие установки
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  const btn = document.getElementById('installBtn');
+  if (btn) btn.style.display = 'inline-flex';
+});
+
+// Кнопка «Установить»
+async function installPWA() {
+  if (!deferredInstallPrompt) {
+    alert('Установка недоступна. Откройте приложение в Chrome/Edge и попробуйте снова.');
+    return;
+  }
+  deferredInstallPrompt.prompt();
+  const { outcome } = await deferredInstallPrompt.userChoice;
+  console.log('Install outcome:', outcome);
+  deferredInstallPrompt = null;
+  const btn = document.getElementById('installBtn');
+  if (btn) btn.style.display = 'none';
+}
+
+// Скрываем кнопку, если приложение уже установлено
+window.addEventListener('appinstalled', () => {
+  const btn = document.getElementById('installBtn');
+  if (btn) btn.style.display = 'none';
+  deferredInstallPrompt = null;
+  console.log('PWA установлено');
+});
+
+// Определяем, запущено ли как PWA (standalone)
+if (window.matchMedia('(display-mode: standalone)').matches ||
+    window.navigator.standalone === true) {
+  const btn = document.getElementById('installBtn');
+  if (btn) btn.style.display = 'none';
 }
 
 // ============================================================
