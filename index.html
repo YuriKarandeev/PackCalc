@@ -1,0 +1,4179 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Калькулятор упаковки</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --primary: #1F4E78;
+    --primary-light: #2a5f8f;
+    --bg: #f0f4f8;
+    --sidebar-bg: #1a2332;
+    --sidebar-hover: #2d3e54;
+    --sidebar-active: #1F4E78;
+    --text: #2c3e50;
+    --text-light: #7f8c8d;
+    --border: #d0d7de;
+    --success: #27ae60;
+    --error: #c0392b;
+    --warning: #e67e22;
+    --white: #ffffff;
+  }
+  body { font-family: 'Segoe UI', Calibri, Arial, sans-serif;
+         background: var(--bg); color: var(--text);
+         display: flex; min-height: 100vh; }
+
+  .sidebar { width: 240px; background: var(--sidebar-bg); color: white;
+             display: flex; flex-direction: column;
+             position: fixed; top: 0; left: 0; bottom: 0;
+             z-index: 100; transition: transform 0.3s; }
+  .sidebar.collapsed { transform: translateX(-240px); }
+  .sidebar-header { padding: 22px 20px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+  .sidebar-header h1 { font-size: 15px; font-weight: bold; line-height: 1.3; }
+  .sidebar-header .sub { font-size: 11px; color: rgba(255,255,255,0.5); margin-top: 4px; }
+  .sidebar-menu { flex: 1; padding: 15px 0; overflow-y: auto; }
+  .menu-item { display: flex; align-items: center; padding: 12px 22px;
+               color: rgba(255,255,255,0.75); font-size: 14px;
+               cursor: pointer; transition: all 0.2s;
+               border-left: 3px solid transparent; user-select: none; }
+  .menu-item:hover { background: var(--sidebar-hover); color: white; }
+  .menu-item.active { background: var(--sidebar-active); color: white;
+                      border-left-color: #4a9eff; }
+  .menu-item .icon { width: 20px; margin-right: 12px; text-align: center; font-size: 16px; }
+  .sidebar-footer { padding: 15px 20px; border-top: 1px solid rgba(255,255,255,0.1);
+                    font-size: 11px; color: rgba(255,255,255,0.4); }
+
+  .main { flex: 1; margin-left: 240px; transition: margin-left 0.3s; min-height: 100vh; }
+  .main.expanded { margin-left: 0; }
+  .topbar { background: white; border-bottom: 1px solid var(--border);
+            padding: 15px 25px; display: flex; align-items: center;
+            gap: 15px; position: sticky; top: 0; z-index: 50; }
+  .hamburger { display: none; background: none; border: none;
+               font-size: 22px; cursor: pointer; color: var(--text); padding: 4px 8px; }
+  .topbar h2 { font-size: 18px; color: var(--primary); font-weight: 600; }
+  .topbar .spacer { flex: 1; }
+  .topbar .status-badge { padding: 5px 12px; background: #e8f5e9;
+                          color: var(--success); font-size: 12px;
+                          border-radius: 12px; font-weight: 500; }
+  .topbar .status-badge.error { background: #ffebee; color: var(--error); }
+
+  .page { display: none; padding: 25px; animation: fadeIn 0.25s ease; }
+  .page.active { display: block; }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .card { background: white; border-radius: 8px;
+          box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+          padding: 25px; margin-bottom: 20px; }
+  .card h3 { font-size: 15px; color: var(--primary); margin-bottom: 18px;
+             padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+
+  .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+               gap: 15px 25px; }
+  .form-field { display: flex; flex-direction: column; gap: 5px; }
+  .form-field label { font-size: 13px; color: var(--text-light); font-weight: 500; }
+  .form-field input { padding: 9px 12px; border: 1px solid var(--border);
+                      border-radius: 5px; font-size: 14px; transition: border 0.2s; }
+  .form-field input:focus { outline: none; border-color: var(--primary);
+                            box-shadow: 0 0 0 3px rgba(31, 78, 120, 0.1); }
+  .form-section-title { grid-column: 1 / -1; font-size: 13px; font-weight: bold;
+                        color: var(--primary); text-transform: uppercase;
+                        letter-spacing: 0.5px; margin-top: 10px;
+                        padding-top: 15px; border-top: 1px solid var(--border); }
+  .form-section-title:first-child { margin-top: 0; padding-top: 0; border-top: none; }
+
+  .btn { padding: 11px 26px; border: none; border-radius: 6px; font-size: 14px;
+         font-weight: 600; cursor: pointer; transition: all 0.2s;
+         display: inline-flex; align-items: center; gap: 8px; }
+  .btn-primary { background: var(--primary); color: white; }
+  .btn-primary:hover { background: var(--primary-light); }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-secondary { background: #e8ecf1; color: var(--text); }
+  .btn-secondary:hover { background: #d5dce3; }
+  .btn-success { background: var(--success); color: white; }
+  .btn-success:hover { background: #219a52; }
+  .btn-warning { background: var(--warning); color: white; }
+  .btn-warning:hover { background: #d35400; }
+  .btn-group { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 20px; }
+
+  .result-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+                 gap: 15px; }
+  .result-item { background: #f8f9fa; border-left: 4px solid var(--primary);
+                 padding: 15px; border-radius: 5px; }
+  .result-item .label { font-size: 11px; color: var(--text-light);
+                        text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px; }
+  .result-item .value { font-size: 22px; font-weight: bold; color: var(--primary); }
+  .result-item.ok { background: #e8f5e9; border-left-color: var(--success); }
+  .result-item.ok .value { color: var(--success); }
+  .result-item.warn { background: #fff3cd; border-left-color: var(--warning); }
+  .result-item.warn .value { color: #b7791f; }
+  .result-item.err { background: #ffebee; border-left-color: var(--error); }
+  .result-item.err .value { color: var(--error); }
+
+  .scheme-controls { display: flex; align-items: center; gap: 15px;
+                     padding: 12px 15px; background: #f8f9fa;
+                     border-radius: 6px; margin-bottom: 15px; flex-wrap: wrap; }
+  .scheme-controls button { padding: 6px 14px; background: white;
+                            border: 1px solid var(--border); border-radius: 4px;
+                            font-size: 13px; cursor: pointer; }
+  .scheme-controls button:hover { background: var(--primary); color: white; }
+  .scheme-controls .label { font-weight: 600; color: var(--primary); }
+  #schemeWrap { overflow: auto; background: #fafbfc;
+                border: 1px solid var(--border); border-radius: 6px;
+                padding: 15px; max-height: 70vh; }
+  #scheme { display: block; }
+
+  #threeWrap { background: linear-gradient(135deg, #e3f2fd 0%, #f0f4f8 100%);
+               border-radius: 6px; overflow: hidden; position: relative; height: 500px; }
+  #threeCanvas { display: block; width: 100%; height: 100%; }
+  .three-hint { position: absolute; bottom: 15px; left: 50%;
+                transform: translateX(-50%); background: rgba(0,0,0,0.7);
+                color: white; padding: 8px 16px; border-radius: 20px;
+                font-size: 12px; pointer-events: none; }
+
+  .views-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+                gap: 20px; margin-bottom: 20px; }
+  .view-card { background: #fafbfc; border: 1px solid var(--border);
+               border-radius: 6px; padding: 15px; }
+  .view-card h4 { font-size: 13px; color: var(--primary); text-align: center;
+                  margin-bottom: 10px; font-weight: 600;
+                  text-transform: uppercase; letter-spacing: 0.5px; }
+  .view-card canvas { display: block; margin: 0 auto; max-width: 100%; }
+
+  .variants-tabs { display: flex; gap: 8px; flex-wrap: wrap;
+                   margin-bottom: 15px; padding-bottom: 12px;
+                   border-bottom: 1px solid var(--border); }
+  .variant-tab { padding: 8px 16px; background: white;
+                 border: 1px solid var(--border); border-radius: 5px;
+                 font-size: 13px; cursor: pointer; transition: all 0.2s;
+                 font-weight: 500; }
+  .variant-tab:hover { background: #eef2f7; }
+  .variant-tab.active { background: var(--primary); color: white;
+                        border-color: var(--primary); }
+
+  .modal-overlay { display: none; position: fixed; inset: 0;
+                   background: rgba(0,0,0,0.5); z-index: 200;
+                   justify-content: center; align-items: center; }
+  .modal-overlay.active { display: flex; }
+  .modal { background: white; border-radius: 10px; padding: 30px;
+           min-width: 400px; max-width: 90vw; box-shadow: 0 10px 40px rgba(0,0,0,0.2); }
+  .modal h3 { color: var(--primary); margin-bottom: 20px; font-size: 17px; }
+  .modal .form-row { display: grid; grid-template-columns: 1fr 1fr;
+                     gap: 12px; margin-bottom: 20px; }
+  .modal .form-field { display: flex; flex-direction: column; gap: 5px; }
+  .modal .form-field label { font-size: 12px; color: var(--text-light); }
+  .modal .form-field input { padding: 8px 10px; border: 1px solid var(--border);
+                             border-radius: 5px; font-size: 14px; }
+  .modal .actions { display: flex; gap: 10px; justify-content: flex-end; }
+
+  .alert { padding: 12px 16px; border-radius: 6px; margin-bottom: 15px;
+           font-size: 13px; border-left: 4px solid; }
+  .alert-warning { background: #fff3cd; color: #856404; border-color: #ffc107; }
+  .alert-danger { background: #ffebee; color: #721c24; border-color: #f5c6cb; }
+  .alert-success { background: #d4edda; color: #155724; border-color: #c3e6cb; }
+  .alert-info { background: #d1ecf1; color: #0c5460; border-color: #bee5eb; }
+
+  .empty-state { text-align: center; padding: 60px 20px; color: var(--text-light); }
+  .empty-state .big-icon { font-size: 64px; opacity: 0.3; margin-bottom: 15px; }
+  .empty-state p { font-size: 15px; margin-bottom: 8px; }
+  .empty-state .hint { font-size: 13px; color: #aaa; }
+
+  .compare-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px;
+                  margin-bottom: 20px; }
+  .compare-card { border-radius: 8px; padding: 20px; border: 2px solid; }
+  .compare-card.now { border-color: var(--warning); background: #fff9f0; }
+  .compare-card.opt { border-color: var(--success); background: #f0fdf4; }
+  .compare-card h4 { font-size: 14px; margin-bottom: 12px;
+                     text-transform: uppercase; letter-spacing: 0.5px; }
+  .compare-card.now h4 { color: #b7791f; }
+  .compare-card.opt h4 { color: #155724; }
+  .compare-card .dim { display: flex; justify-content: space-between;
+                       padding: 6px 0; border-bottom: 1px dashed rgba(0,0,0,0.1);
+                       font-size: 13px; }
+  .compare-card .dim:last-child { border-bottom: none; }
+  .compare-card .dim .k { color: var(--text-light); }
+  .compare-card .dim .v { font-weight: 600; }
+
+  @media (max-width: 768px) {
+    .sidebar { transform: translateX(-240px); }
+    .sidebar.mobile-open { transform: translateX(0); }
+    .main { margin-left: 0; }
+    .hamburger { display: block; }
+    .topbar h2 { font-size: 15px; }
+    .page { padding: 15px; }
+    .card { padding: 18px; }
+    #threeWrap { height: 350px; }
+    .modal { min-width: auto; padding: 20px; }
+    .compare-grid { grid-template-columns: 1fr; }
+  }
+
+  .overlay { display: none; position: fixed; inset: 0;
+             background: rgba(0,0,0,0.5); z-index: 90; }
+  .overlay.active { display: block; }
+
+  .orient-option { user-select: none; transition: all 0.2s; }
+  .orient-option:hover { border-color: #1F4E78 !important; }
+
+/* ============ ПОДВКЛАДКИ ============ */
+.subtabs { display: flex; gap: 4px; margin-bottom: 20px;
+           border-bottom: 2px solid var(--border); }
+.subtab { padding: 10px 20px; background: transparent;
+          border: none; border-bottom: 3px solid transparent;
+          font-size: 14px; font-weight: 600; color: var(--text-light);
+          cursor: pointer; margin-bottom: -2px; transition: all 0.2s; }
+.subtab:hover { color: var(--primary); }
+.subtab.active { color: var(--primary); border-bottom-color: var(--primary); }
+.subtab-content { display: none; }
+.subtab-content.active { display: block; }
+
+/* ============ ТАБЛИЦА ОБОРУДОВАНИЯ ============ */
+.eq-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.eq-table th { background: #eef2f7; color: var(--primary);
+               font-weight: 600; padding: 8px 6px; text-align: left;
+               border: 1px solid var(--border); font-size: 12px;
+               white-space: nowrap; }
+.eq-table td { padding: 4px 4px; border: 1px solid var(--border); vertical-align: middle; }
+.eq-table input, .eq-table select {
+  width: 100%; padding: 6px 8px; border: 1px solid transparent;
+  border-radius: 4px; font-size: 13px; background: #fafbfc;
+}
+.eq-table input:focus, .eq-table select:focus {
+  outline: none; border-color: var(--primary); background: white;
+  box-shadow: 0 0 0 2px rgba(31,78,120,0.1);
+}
+.eq-table input[type="number"] { text-align: right; }
+.eq-table .col-num { width: 36px; text-align: center; color: var(--text-light); }
+.eq-table .col-actions { width: 36px; text-align: center; }
+.eq-table .btn-del { background: none; border: none; cursor: pointer;
+                     color: var(--error); font-size: 16px; padding: 4px; }
+.eq-table .btn-del:hover { background: #ffebee; border-radius: 4px; }
+.eq-table tfoot td { background: #f8f9fa; font-weight: 600; font-size: 12px; }
+
+/* Справочник */
+.ref-block { margin-bottom: 30px; }
+.ref-block h4 { font-size: 14px; color: var(--primary);
+                margin-bottom: 12px; padding-bottom: 8px;
+                border-bottom: 1px solid var(--border); }
+.ref-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.ref-table th { background: #eef2f7; color: var(--primary);
+                font-weight: 600; padding: 8px 6px; text-align: left;
+                border: 1px solid var(--border); font-size: 12px; }
+.ref-table td { padding: 4px; border: 1px solid var(--border); }
+.ref-table input { width: 100%; padding: 6px 8px;
+                   border: 1px solid var(--border); border-radius: 4px;
+                   font-size: 13px; }
+.ref-table input:focus { outline: none; border-color: var(--primary); }
+.ref-table input[type="number"] { text-align: right; }
+
+/* Цвет-селект в справочнике */
+.color-select { display: flex; align-items: center; gap: 6px; }
+.color-select select { width: 100%; padding: 6px 8px;
+  border: 1px solid var(--border); border-radius: 4px; font-size: 13px; }
+.color-select .swatch { display: inline-block; width: 16px; height: 16px;
+  border-radius: 3px; border: 1px solid rgba(0,0,0,0.2); flex-shrink: 0; }
+
+/* 3D-блок */
+#deliveryThreeWrap { background: linear-gradient(135deg,#eef4fa 0%,#f0f4f8 100%);
+  border-radius: 6px; overflow: hidden; position: relative; height: 480px; margin-top: 15px; }
+#deliveryThreeCanvas { display: block; width: 100%; height: 100%; }
+.tc-select-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.tc-select-row label { font-size: 13px; color: var(--text-light); font-weight: 500; }
+.tc-select-row select { padding: 8px 12px; border: 1px solid var(--border);
+  border-radius: 5px; font-size: 14px; min-width: 260px; }
+
+/* Результат */
+.tc-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.tc-table th { background: var(--primary); color: white; font-weight: 600;
+               padding: 10px 8px; text-align: left; font-size: 12px; }
+.tc-table td { padding: 9px 8px; border-bottom: 1px solid var(--border); }
+.tc-table tr:hover { background: #f8f9fa; }
+.tc-table .total { font-weight: bold; color: var(--primary); font-size: 14px; }
+.tc-table .bad { color: var(--error); font-weight: 600; }
+.tc-table .good { color: var(--success); font-weight: 600; }
+/* Кнопка прикрепления в шапке вкладки */
+.attach-btn {
+  padding: 7px 16px; background: #fff; color: var(--primary);
+  border: 1px solid var(--primary); border-radius: 5px;
+  font-size: 13px; font-weight: 600; cursor: pointer;
+  transition: all 0.2s; white-space: nowrap;
+}
+.attach-btn:hover { background: var(--primary); color: #fff; }
+.attach-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.attach-btn:disabled:hover { background: #fff; color: var(--primary); }
+
+/* Проекты */
+.project-card {
+  background: #fff; border: 1px solid var(--border); border-radius: 8px;
+  margin-bottom: 15px; overflow: hidden;
+}
+.project-header {
+  padding: 15px 20px; background: #f8f9fa; cursor: pointer;
+  display: flex; align-items: center; gap: 12px;
+  border-bottom: 1px solid var(--border); user-select: none;
+}
+.project-header:hover { background: #eef2f7; }
+.project-header .chev { color: var(--primary); font-weight: bold; font-size: 14px;
+  transition: transform 0.2s; }
+.project-header.open .chev { transform: rotate(90deg); }
+.project-header .p-client { font-size: 12px; color: var(--text-light);
+  text-transform: uppercase; letter-spacing: 0.5px; }
+.project-header .p-name { font-size: 15px; font-weight: bold; color: var(--primary); }
+.project-header .p-date { margin-left: auto; font-size: 11px; color: #aaa; }
+.project-header .p-del { background: none; border: none; cursor: pointer;
+  color: var(--error); font-size: 15px; padding: 4px 8px; border-radius: 4px; }
+.project-header .p-del:hover { background: #ffebee; }
+.project-body { display: none; padding: 0; }
+.project-body.open { display: block; }
+.entry-row {
+  display: flex; align-items: center; gap: 15px;
+  padding: 12px 20px; border-bottom: 1px solid #f0f0f0;
+  cursor: pointer; transition: background 0.15s;
+}
+.entry-row:hover { background: #f8f9fa; }
+.entry-row:last-child { border-bottom: none; }
+.entry-row .e-type { font-size: 11px; padding: 3px 8px; border-radius: 10px;
+  background: #e3f2fd; color: #1976d2; font-weight: 600; white-space: nowrap; }
+.entry-row .e-type.product { background: #fff3e0; color: #e65100; }
+.entry-row .e-type.pallet { background: #e8f5e9; color: #2e7d32; }
+.entry-row .e-type.delivery { background: #e1f5fe; color: #0277bd; }
+.entry-row .e-title { flex: 1; font-size: 13px; color: var(--text); }
+.entry-row .e-summary { font-size: 12px; color: var(--text-light); }
+.entry-row .e-date { font-size: 11px; color: #aaa; white-space: nowrap; }
+.entry-row .e-del { background: none; border: none; cursor: pointer;
+  color: var(--error); font-size: 14px; padding: 4px 8px; border-radius: 4px; }
+.entry-row .e-del:hover { background: #ffebee; }
+.entry-empty { padding: 20px; text-align: center; color: #aaa; font-size: 13px; }
+
+/* Модалка выбора проекта */
+.proj-opt-btn {
+  display: block; width: 100%; padding: 14px 18px; margin-bottom: 10px;
+  background: #f8f9fa; border: 2px solid var(--border); border-radius: 8px;
+  text-align: left; cursor: pointer; transition: all 0.2s;
+  font-size: 14px; font-weight: 600; color: var(--primary);
+}
+.proj-opt-btn:hover { border-color: var(--primary); background: #eef2f7; }
+.proj-opt-btn .small { display: block; font-size: 12px; font-weight: normal;
+  color: var(--text-light); margin-top: 4px; }
+</style>
+</head>
+<body>
+
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-header">
+    <h1>КАЛЬКУЛЯТОР УПАКОВКИ</h1>
+    <div class="sub">Версия 3.2</div>
+  </div>
+  <nav class="sidebar-menu">
+    <div class="menu-item active" data-page="page-product">
+      <span class="icon">📦</span>
+      <span>Продукт в короб</span>
+    </div>
+    <div class="menu-item" data-page="page-pallet">
+      <span class="icon">🏗️</span>
+      <span>Короб на паллете</span>
+    </div>
+    <div class="menu-item" data-page="page-delivery">
+      <span class="icon">🚚</span>
+      <span>Расчёт доставки</span>
+    </div>
+    <div class="menu-item" data-page="page-projects">
+      <span class="icon">📁</span>
+      <span>Проекты</span>
+    </div>
+  </nav>
+  <div class="sidebar-footer">
+    © 2026 Калькулятор упаковки<br>
+    Веб-версия
+  </div>
+</aside>
+
+<div class="overlay" id="overlay" onclick="toggleSidebar()"></div>
+
+<main class="main" id="main">
+  <header class="topbar">
+    <button class="hamburger" onclick="toggleSidebar()">☰</button>
+    <h2 id="pageTitle">Продукт в короб</h2>
+    <div class="spacer"></div>
+    <button class="attach-btn" id="attachBtn" onclick="openAttachDialog()">📎 Прикрепить к проекту</button>
+    <div class="status-badge" id="topStatus">Готово</div>
+  </header>
+
+<section class="page active" id="page-product">
+  <div class="card">
+    <h3>Параметры продукта и короба</h3>
+    <div class="form-grid">
+      <div class="form-field">
+        <label>Длина продукта (мм)</label>
+        <input id="p_prod_l" type="number" value="100" min="1">
+      </div>
+      <div class="form-field">
+        <label>Ширина продукта (мм)</label>
+        <input id="p_prod_w" type="number" value="80" min="1">
+      </div>
+      <div class="form-field">
+        <label>Высота продукта (мм)</label>
+        <input id="p_prod_h" type="number" value="60" min="1">
+      </div>
+
+      <div class="form-section-title">Укладка</div>
+
+      <div class="form-field">
+        <label>Количество продукта по длине короба</label>
+        <input id="p_per_row" type="number" value="3" min="1">
+      </div>
+      <div class="form-field">
+        <label>Количество по ширине короба</label>
+        <input id="p_per_layer" type="number" value="2" min="1">
+      </div>
+      <div class="form-field">
+        <label>Количество слоёв</label>
+        <input id="p_layers" type="number" value="4" min="1">
+      </div>
+
+      <div class="form-section-title">Параметры короба</div>
+
+      <div class="form-field">
+        <label>Длина короба (мм)</label>
+        <input id="p_box_l" type="number" value="350" min="1">
+      </div>
+      <div class="form-field">
+        <label>Ширина короба (мм)</label>
+        <input id="p_box_w" type="number" value="245" min="1">
+      </div>
+      <div class="form-field">
+        <label>Высота короба (мм)</label>
+        <input id="p_box_h" type="number" value="250" min="1">
+      </div>
+    </div>
+
+    <div class="btn-group">
+      <button class="btn btn-primary" onclick="calculateProduct()">▶ РАССЧИТАТЬ</button>
+      <button class="btn btn-secondary" onclick="resetProduct()">↺ Сбросить</button>
+    </div>
+  </div>
+
+  <div id="productResult" style="display:none;">
+
+    <div class="card">
+      <h3>Сравнение размеров короба</h3>
+      <div id="productCompare"></div>
+    </div>
+
+    <div class="card">
+      <h3>📦 Текущая укладка</h3>
+      <div id="currentInfo" style="padding:8px 12px; background:#fff9f0; border-radius:6px;
+                                     font-size:13px; margin-bottom:15px; border-left:3px solid #e67e22;">
+        Текущий короб: <strong id="currBoxLabel">—</strong>
+      </div>
+      <div class="views-grid">
+        <div class="view-card">
+          <h4>Вид спереди</h4>
+          <canvas id="viewFront" width="320" height="280"></canvas>
+        </div>
+        <div class="view-card">
+          <h4>Вид сбоку</h4>
+          <canvas id="viewSide" width="320" height="280"></canvas>
+        </div>
+        <div class="view-card">
+          <h4>Вид сверху</h4>
+          <canvas id="viewTop" width="320" height="280"></canvas>
+        </div>
+      </div>
+      <div style="margin-top:20px;">
+        <h4 style="font-size:13px; color:#1F4E78; margin-bottom:10px;">3D-модель (текущая)</h4>
+        <div id="threeProductWrap" style="background:linear-gradient(135deg,#e3f2fd 0%,#f0f4f8 100%);
+                                          border-radius:6px; overflow:hidden; position:relative; height:450px;">
+          <canvas id="threeProductCanvas" style="display:block;width:100%;height:100%;"></canvas>
+          <div class="three-hint">🖱 Потяните мышью · Колесо для зума</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>✨ Оптимальная укладка</h3>
+      <div id="optimalInfo" style="padding:8px 12px; background:#f0fdf4; border-radius:6px;
+                                     font-size:13px; margin-bottom:15px; border-left:3px solid #27ae60;">
+        Оптимальный короб: <strong id="optBoxLabel">—</strong>
+      </div>
+      <div class="views-grid">
+        <div class="view-card">
+          <h4>Вид спереди</h4>
+          <canvas id="viewFrontOpt" width="320" height="280"></canvas>
+        </div>
+        <div class="view-card">
+          <h4>Вид сбоку</h4>
+          <canvas id="viewSideOpt" width="320" height="280"></canvas>
+        </div>
+        <div class="view-card">
+          <h4>Вид сверху</h4>
+          <canvas id="viewTopOpt" width="320" height="280"></canvas>
+        </div>
+      </div>
+      <div style="margin-top:20px;">
+        <h4 style="font-size:13px; color:#1F4E78; margin-bottom:10px;">3D-модель (оптимальная)</h4>
+        <div id="threeOptWrap" style="background:linear-gradient(135deg,#f0fdf4 0%,#e8f5e9 100%);
+                                        border-radius:6px; overflow:hidden; position:relative; height:450px;">
+          <canvas id="threeOptCanvas" style="display:block;width:100%;height:100%;"></canvas>
+          <div class="three-hint">🖱 Потяните мышью · Колесо для зума</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" id="palletButtonCard">
+      <h3>🏗️ Расчёт паллета</h3>
+      <p style="color:#7f8c8d; font-size:14px; margin-bottom:15px;">
+        Рассчитать количество коробов на паллете (1 слой) — для текущего и оптимального короба.
+      </p>
+      <button class="btn btn-success" onclick="openPalletDialog()">
+        🏗️ РАССЧИТАТЬ ПАЛЛЕТУ
+      </button>
+    </div>
+
+    <div id="palletResultCard" style="display:none;">
+      <div class="card">
+        <h3>Расчёт паллета (1 слой)</h3>
+        <div id="palletResultContent"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>📄 Экспорт в PDF</h3>
+      <p style="color:#7f8c8d; font-size:14px; margin-bottom:15px;">
+        Сохранить все расчёты (продукт, оптимальный короб, паллет) в PDF-файл.
+      </p>
+      <button class="btn btn-success" onclick="exportProductPagePDF()">
+        📄 ЭКСПОРТ В PDF
+      </button>
+    </div>
+  </div>
+  </section>
+
+  <section class="page" id="page-pallet">
+    <div class="card">
+      <h3>Параметры паллета и короба</h3>
+      <div class="form-grid">
+        <div class="form-field">
+          <label>Длина паллета (мм)</label>
+          <input id="pallet_l" type="number" value="1200" min="1">
+        </div>
+        <div class="form-field">
+          <label>Ширина паллета (мм)</label>
+          <input id="pallet_w" type="number" value="800" min="1">
+        </div>
+        <div class="form-field">
+          <label>Высота паллета (мм)</label>
+          <input id="pallet_h" type="number" value="145" min="0">
+        </div>
+        <div class="form-field">
+          <label>Свес с каждой стороны (мм)</label>
+          <input id="overhang" type="number" value="0" min="0">
+        </div>
+
+        <div class="form-section-title">Параметры короба</div>
+
+        <div class="form-field">
+          <label>Длина короба (мм)</label>
+          <input id="box_l" type="number" value="350" min="1">
+        </div>
+        <div class="form-field">
+          <label>Ширина короба (мм)</label>
+          <input id="box_w" type="number" value="245" min="1">
+        </div>
+        <div class="form-field">
+          <label>Высота короба (мм)</label>
+          <input id="box_h" type="number" value="170" min="1">
+        </div>
+        <div class="form-field">
+          <label>Вес короба (кг)</label>
+          <input id="box_weight" type="number" value="5" min="0" step="0.1">
+        </div>
+
+        <div class="form-section-title">Ограничения</div>
+
+        <div class="form-field">
+          <label>Макс. высота груза (мм)</label>
+          <input id="max_h" type="number" value="1800" min="1">
+        </div>
+        <div class="form-field">
+          <label>Макс. вес груза (кг)</label>
+          <input id="max_weight" type="number" value="1000" min="0">
+        </div>
+      </div>
+
+      <div class="btn-group">
+        <button class="btn btn-primary" onclick="calculatePallet()">▶ РАССЧИТАТЬ</button>
+        <button class="btn btn-secondary" onclick="resetPallet()">↺ Сбросить</button>
+      </div>
+    </div>
+
+    <div id="palletResultMain" style="display:none;">
+      <div class="card">
+        <h3>Результат расчёта</h3>
+        <div id="palletSummary"></div>
+      </div>
+      <div class="card">
+        <h3>Схема слоя</h3>
+        <div class="scheme-controls" id="palletSchemeControls" style="display:none;">
+          <span class="label" id="palletLayerLabel">Раскладка одного слоя</span>
+          <span style="margin-left:auto;font-size:12px;color:#7f8c8d;" id="palletSchemeInfo"></span>
+        </div>
+        <div id="palletSchemeWrap" style="overflow:auto;background:#fafbfc;border:1px solid #d0d7de;border-radius:6px;padding:15px;max-height:70vh;">
+          <canvas id="palletScheme" style="display:none;"></canvas>
+          <div class="empty-state" id="palletSchemeEmpty">
+            <div class="big-icon">📐</div>
+            <p>Нет схемы</p>
+          </div>
+        </div>
+      </div>
+    </div>
+<div class="card">
+  <h3>📄 Экспорт в PDF</h3>
+  <p style="color:#7f8c8d; font-size:14px; margin-bottom:15px;">
+    Сохранить расчёт коробов на паллете в PDF-файл.
+  </p>
+  <button class="btn btn-success" onclick="exportPalletPagePDF()">
+    📄 ЭКСПОРТ В PDF
+  </button>
+</div>
+  </section>
+  <!-- ============================================================
+       СТРАНИЦА 3: РАСЧЁТ ДОСТАВКИ
+       ============================================================ -->
+  <section class="page" id="page-delivery">
+    <div class="subtabs">
+      <button class="subtab active" onclick="switchDeliveryTab('equipment')">📋 Оборудование</button>
+      <button class="subtab" onclick="switchDeliveryTab('reference')">📚 Справочник</button>
+    </div>
+
+    <!-- ============ ПОДВКЛАДКА: ОБОРУДОВАНИЕ ============ -->
+    <div class="subtab-content active" id="delivery-tab-equipment">
+      <div class="card">
+        <h3>Позиции оборудования</h3>
+        <div style="overflow-x:auto;">
+          <table class="eq-table" id="eqTable">
+            <thead>
+              <tr>
+                <th class="col-num">№</th>
+                <th style="min-width:170px;">Категория</th>
+                <th style="min-width:160px;">Наименование</th>
+                <th style="width:80px;">Кол-во</th>
+                <th style="width:90px;">Длина, м</th>
+                <th style="width:90px;">Ширина, м</th>
+                <th style="width:90px;">Высота, м</th>
+                <th style="width:90px;">Вес 1 ед., кг</th>
+                <th class="col-actions"></th>
+              </tr>
+            </thead>
+            <tbody id="eqTableBody"></tbody>
+          </table>
+        </div>
+
+        <div class="btn-group">
+          <button class="btn btn-secondary" onclick="addEquipmentRow()">+ Добавить строку</button>
+          <button class="btn btn-primary" onclick="calculateDelivery()">▶ РАССЧИТАТЬ</button>
+          <button class="btn btn-secondary" onclick="resetDelivery()">↺ Сбросить</button>
+        </div>
+      </div>
+
+      <div id="deliveryResult" style="display:none;">
+        <div class="card">
+          <h3>Сводка по грузу</h3>
+          <div id="deliverySummary"></div>
+          <div id="oversizeAlert" style="display:none;"></div>
+        </div>
+
+        <div class="card">
+          <h3>По позициям</h3>
+          <div style="overflow-x:auto;">
+            <table class="eq-table">
+              <thead>
+                <tr>
+                  <th class="col-num">№</th>
+                  <th>Наименование</th>
+                  <th>Кол-во</th>
+                  <th>Мест по полу</th>
+                  <th>В ряд по ширине</th>
+                  <th>Рядов в машине</th>
+                  <th>Единиц в машине</th>
+                  <th>Машина №</th>
+                </tr>
+              </thead>
+              <tbody id="deliveryPositionsBody"></tbody>
+              <tfoot id="deliveryPositionsFooter"></tfoot>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Необходимое количество фур по типам ТС</h3>
+          <div style="overflow-x:auto;">
+            <table class="tc-table">
+              <thead>
+                <tr>
+                  <th>Тип ТС</th>
+                  <th>Длина, м</th>
+                  <th>Ширина, м</th>
+                  <th>Высота, м</th>
+                  <th>Грузоподъёмность, кг</th>
+                  <th>Фур по длине</th>
+                  <th>Фур по весу</th>
+                  <th>ИТОГО фур</th>
+                  <th>По высоте</th>
+                </tr>
+              </thead>
+               <tbody id="deliveryTCBody"></tbody>
+            </table>
+          </div>
+          <div id="deliveryBestTC"></div>
+        </div>
+
+        <div class="card" id="deliveryThreeCard" style="display:none;">
+          <h3>🧊 3D-раскладка груза в кузове</h3>
+          <div class="tc-select-row">
+            <label>Тип ТС:</label>
+            <select id="deliveryThreeTC" onchange="renderDelivery3D()"></select>
+          </div>
+          <div id="deliveryThreeWrap">
+            <canvas id="deliveryThreeCanvas"></canvas>
+          </div>
+          <div id="deliveryThreeAlert" style="display:none;" class="alert alert-warning"></div>
+          <div class="three-hint" style="bottom:10px;">🖱 Потяните мышью · Колесо для зума</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ ПОДВКЛАДКА: СПРАВОЧНИК ============ -->
+    <div class="subtab-content" id="delivery-tab-reference">
+
+      <div class="card ref-block">
+        <h4>📦 Категории оборудования (для выпадающего списка)</h4>
+        <table class="ref-table" id="refCategoriesTable">
+          <thead>
+            <tr>
+              <th style="width:40px;">№</th>
+              <th>Категория</th>
+              <th style="width:180px;">Ярусов штабелирования</th>
+              <th style="width:160px;">Цвет</th>
+              <th style="width:40px;"></th>
+            </tr>
+          </thead>
+          <tbody id="refCategoriesBody"></tbody>
+        </table>
+        <div class="btn-group">
+          <button class="btn btn-secondary" onclick="addRefCategory()">+ Категория</button>
+        </div>
+      </div>
+
+      <div class="card ref-block">
+        <h4>🚚 Типы транспорта (ТС)</h4>
+        <table class="ref-table" id="refTCTable">
+          <thead>
+            <tr>
+              <th style="width:40px;">№</th>
+              <th style="min-width:180px;">Название</th>
+              <th style="width:90px;">Длина, м</th>
+              <th style="width:90px;">Ширина, м</th>
+              <th style="width:90px;">Высота, м</th>
+              <th style="width:110px;">Площадь пола, м²</th>
+              <th style="width:120px;">Грузоподъёмность, кг</th>
+              <th>Комментарий</th>
+              <th style="width:40px;"></th>
+            </tr>
+          </thead>
+          <tbody id="refTCBody"></tbody>
+        </table>
+        <div class="btn-group">
+          <button class="btn btn-secondary" onclick="addRefTC()">+ Тип ТС</button>
+        </div>
+      </div>
+
+      <div class="card ref-block">
+        <h4>⚙️ Параметры расчёта</h4>
+        <div class="form-grid" style="grid-template-columns: 1fr 1fr;">
+          <div class="form-field">
+            <label>Коэффициент запаса длины (проходы, зазоры, крепёж), %</label>
+            <input id="ref_margin" type="number" value="20" min="0" max="200" step="1">
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ============================================================
+       СТРАНИЦА 4: ПРОЕКТЫ
+       ============================================================ -->
+  <section class="page" id="page-projects">
+    <div class="card">
+      <h3>📁 Проекты и прикреплённые расчёты</h3>
+      <p style="color:#7f8c8d; font-size:13px; margin-bottom:15px;">
+        Здесь хранятся все проекты и прикреплённые к ним расчёты.
+        Кликните на расчёт, чтобы восстановить его на соответствующей вкладке.
+      </p>
+      <div class="btn-group" style="margin-top:0;">
+        <button class="btn btn-secondary" onclick="createEmptyProject()">+ Новый проект</button>
+        <button class="btn btn-secondary" onclick="clearAllProjects()" style="color:#c0392b;">🗑 Очистить всё</button>
+      </div>
+    </div>
+    <div id="projectsList"></div>
+  </section>
+</main>
+
+<!-- ============================================================
+     МОДАЛКА: ПРИКРЕПИТЬ К ПРОЕКТУ
+     ============================================================ -->
+<div class="modal-overlay" id="attachModal">
+  <div class="modal" style="min-width: 480px;">
+    <h3>📎 Прикрепить к проекту</h3>
+    <div id="attachStep1">
+      <button class="proj-opt-btn" onclick="attachChooseExisting()">
+        📂 Выбрать из существующего проекта
+        <span class="small">Выбрать проект из списка</span>
+      </button>
+      <button class="proj-opt-btn" onclick="attachCreateNew()">
+        ✨ Создать новый проект
+        <span class="small">Ввести клиента и название</span>
+      </button>
+    </div>
+    <div id="attachStep2" style="display:none;">
+      <div class="form-field" style="margin-bottom:12px;">
+        <label>Проект:</label>
+        <select id="attachProjectSelect" style="padding:9px 12px;border:1px solid var(--border);border-radius:5px;font-size:14px;"></select>
+      </div>
+    </div>
+    <div id="attachStep3" style="display:none;">
+      <div class="form-field" style="margin-bottom:12px;">
+        <label>Клиент</label>
+        <input id="newProjectClient" type="text" placeholder="Например: ООО Ромашка"
+               style="padding:9px 12px;border:1px solid var(--border);border-radius:5px;font-size:14px;width:100%;">
+      </div>
+      <div class="form-field" style="margin-bottom:12px;">
+        <label>Название проекта</label>
+        <input id="newProjectName" type="text" placeholder="Например: Склад 2026"
+               style="padding:9px 12px;border:1px solid var(--border);border-radius:5px;font-size:14px;width:100%;">
+      </div>
+    </div>
+    <div class="actions" style="margin-top:20px;">
+      <button class="btn btn-secondary" onclick="closeAttachDialog()">Отмена</button>
+      <button class="btn btn-primary" id="attachConfirmBtn" onclick="attachConfirm()" style="display:none;">Прикрепить</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="orientModal">
+  <div class="modal" style="min-width: 700px; max-width: 90vw;">
+    <h3>📐 Выберите ориентацию продукта в коробе</h3>
+    <p style="color:#7f8c8d; font-size:13px; margin-bottom:20px;">
+      Продукт можно укладывать разными способами. Выберите подходящий вариант —
+      от него зависит, как продукты расположатся в коробе и какой размер короба оптимален.
+    </p>
+    <div id="orientOptions" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap:15px; margin-bottom:20px;"></div>
+    <div class="actions">
+      <button class="btn btn-secondary" onclick="closeOrientDialog()">Отмена</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="palletModal">
+  <div class="modal">
+    <h3>🏗️ Введите размер паллета</h3>
+    <div class="form-row">
+      <div class="form-field">
+        <label>Длина паллета (мм)</label>
+        <input id="modal_pallet_l" type="number" value="1200" min="1">
+      </div>
+      <div class="form-field">
+        <label>Ширина паллета (мм)</label>
+        <input id="modal_pallet_w" type="number" value="800" min="1">
+      </div>
+    </div>
+    <div class="actions">
+      <button class="btn btn-secondary" onclick="closePalletDialog()">Отмена</button>
+      <button class="btn btn-primary" onclick="applyPalletDialog()">Рассчитать</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
+
+<script>
+// ============================================================
+// УТИЛИТА: рисуем текстовый блок на canvas для вставки в PDF
+// ============================================================
+function drawTextBlockToCanvas(opts) {
+  const canvas = document.createElement('canvas');
+  const W = opts.width, H = opts.height;
+  const scale = 2;
+  canvas.width = W * scale;
+  canvas.height = H * scale;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(scale, scale);
+
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, W, H);
+
+  if (opts.header) {
+    ctx.fillStyle = opts.header.bg || '#1F4E78';
+    ctx.font = 'bold 18px "Segoe UI", Arial, sans-serif';
+    ctx.textBaseline = 'middle';
+
+    if (opts.header.bgFitText) {
+      // Фон только за текстом + 10 мм по ширине и высоте
+      const padX = 10;
+      const padY = 10;
+      const tw = ctx.measureText(opts.header.text).width;
+      const bgW = tw + padX * 2;
+      const bgH = 18 + padY * 2;
+      ctx.fillRect(0, 0, bgW, bgH);
+      ctx.fillStyle = opts.header.color || '#ffffff';
+      ctx.fillText(opts.header.text, padX, bgH / 2);
+    } else {
+      // Обычный режим — фон на всю ширину
+      ctx.fillRect(0, 0, W, 40);
+      ctx.fillStyle = opts.header.color || '#ffffff';
+      ctx.fillText(opts.header.text, 15, 20);
+    }
+  }
+
+  let y = opts.startY || 60;
+  for (const l of (opts.lines || [])) {
+    ctx.fillStyle = l.color || '#222';
+    ctx.font = (l.bold ? 'bold ' : '') + (l.size || 14) + 'px "Segoe UI", Arial, sans-serif';
+    ctx.textBaseline = 'top';
+    ctx.fillText(l.text, l.indent || 15, y);
+    y += l.size ? l.size + 8 : 20;
+  }
+
+  for (const b of (opts.badges || [])) {
+    const pad = 12;
+    ctx.font = (b.size || 14) + 'px "Segoe UI", Arial, sans-serif';
+    const tw = ctx.measureText(b.text).width + pad * 2;
+    ctx.fillStyle = b.bg || '#27ae60';
+    ctx.fillRect(15, b.y, tw, (b.size || 14) + 10);
+    ctx.fillStyle = b.color || '#ffffff';
+    ctx.textBaseline = 'top';
+    ctx.fillText(b.text, 15 + pad, b.y + 6);
+  }
+
+  return canvas;
+}
+
+// ============================================================
+// НАВИГАЦИЯ
+// ============================================================
+const pageTitles = {
+  'page-product': 'Продукт в короб',
+  'page-pallet': 'Короб на паллете',
+  'page-delivery': 'Расчёт доставки',
+  'page-projects': 'Проекты',
+};
+document.querySelectorAll('.menu-item').forEach(item => {
+  item.addEventListener('click', () => {
+    switchPage(item.dataset.page);
+    if (window.innerWidth <= 768) {
+      document.getElementById('sidebar').classList.remove('mobile-open');
+      document.getElementById('overlay').classList.remove('active');
+    }
+  });
+});
+
+function toggleSidebar() {
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('overlay');
+  if (window.innerWidth <= 768) {
+    sidebar.classList.toggle('mobile-open');
+    overlay.classList.toggle('active');
+  } else {
+    sidebar.classList.toggle('collapsed');
+    document.getElementById('main').classList.toggle('expanded');
+  }
+}
+
+function setStatus(text, type) {
+  const el = document.getElementById('topStatus');
+  el.textContent = text;
+  el.className = 'status-badge' + (type === 'error' ? ' error' : '');
+}
+
+function getVal(id) { return parseFloat(document.getElementById(id).value) || 0; }
+
+// ============================================================
+// ============  ЧАСТЬ 1: ПРОДУКТ В КОРОБ  ====================
+// ============================================================
+
+let productState = {
+  prodL: 0, prodW: 0, prodH: 0,
+  perRow: 0, perLayer: 0, layers: 0,
+  boxL: 0, boxW: 0, boxH: 0,
+  variants: [],
+  activeVariant: 0,
+  options: [],
+  optimal: null,
+  palletResult: null,
+  threeRenderer: null,
+  threeScene: null,
+  threeCamera: null,
+};
+
+// ============================================================
+// ============  ЧАСТЬ 3: РАСЧЁТ ДОСТАВКИ  ====================
+// ============================================================
+
+// Состояние страницы доставки
+let deliveryState = {
+  rows: [],          // позиции оборудования
+  lastResult: null,  // результат последнего расчёта
+};
+
+// Палитра из 20 стандартных цветов (hex)
+const DELIVERY_PALETTE = [
+  '#C6EFCE', '#FFEB9C', '#BDD7EE', '#FFC7CE', '#D9D2E9',
+  '#FCE4D6', '#D0E0E3', '#E2EFDA', '#FFF2CC', '#DDEBF7',
+  '#F4CCCC', '#D9EAD3', '#CFE2F3', '#F9CB9C', '#D5A6BD',
+  '#B6D7A8', '#A4C2F4', '#F6B26B', '#EAD1DC', '#B4A7D6',
+];
+
+// Справочник
+const deliveryRef = {
+  categories: [
+    { name: 'Конвейеры', tiers: 1, color: '#C6EFCE' },
+    { name: 'ГФП', tiers: 1, color: '#BDD7EE' },
+    { name: 'Ограждения', tiers: 3, color: '#FFEB9C' },
+    { name: 'Коботы', tiers: 2, color: '#FFC7CE' },
+    { name: 'Роботизированные ячейки (дельта-роботы)', tiers: 1, color: '#D9D2E9' },
+    { name: 'Роботы-манипуляторы', tiers: 2, color: '#FCE4D6' },
+    { name: 'Этикетировщики', tiers: 2, color: '#D0E0E3' },
+    { name: 'Чеквейеры', tiers: 2, color: '#E2EFDA' },
+    { name: 'Металлодетекторы', tiers: 2, color: '#FFF2CC' },
+    { name: 'Формирователи коробов', tiers: 1, color: '#DDEBF7' },
+    { name: 'Заклейщики коробов', tiers: 1, color: '#F4CCCC' },
+    { name: 'Прочее / доп. позиция', tiers: 1, color: '#D9EAD3' },
+  ],  transport: [
+    { name: 'Тент 20т (стандарт)',                  l: 12,    w: 2.2,  h: 2.4,  capacity: 20000, comment: 'Типовые параметры тентованного полуприцепа 20 т' },
+    { name: 'Тент/мега (увеличенный объём)',        l: 13.6,  w: 2.45, h: 3,    capacity: 20000, comment: "Мега-трейлер" },
+    { name: 'Изотермический/рефрижератор',          l: 13.6,  w: 2.45, h: 2.5,  capacity: 18000, comment: 'Реф' },
+    { name: 'Малотоннажный фургон (типа Газель)',   l: 4.2,   w: 2.05, h: 2.1,  capacity: 1500,  comment: 'Для мелких партий' },
+    { name: "Морской контейнер 40' (стандарт)",     l: 12.03, w: 2.35, h: 2.39, capacity: 26000, comment: 'Внутренние размеры 40-фут контейнера' },
+    { name: 'Негабарит (трал/платформа)',           l: 0,     w: 0,    h: 0,    capacity: 0,     comment: 'Индивидуальный расчёт' },
+  ],
+  marginPct: 20,
+};
+
+// === Переключение подвкладок ===
+function switchDeliveryTab(name) {
+  document.querySelectorAll('#page-delivery .subtab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('#page-delivery .subtab-content').forEach(c => c.classList.remove('active'));
+  const map = { equipment: 0, reference: 1 };
+  const idx = map[name];
+  document.querySelectorAll('#page-delivery .subtab')[idx].classList.add('active');
+  document.getElementById('delivery-tab-' + name).classList.add('active');
+}
+
+// ============================================================
+// ТАБЛИЦА ОБОРУДОВАНИЯ
+// ============================================================
+function eqRowId() { return 'eq_' + Math.random().toString(36).slice(2, 9); }
+
+function addEquipmentRow(data) {
+  const rowId = eqRowId();
+  const row = data || { id: rowId, catIdx: 0, name: '', qty: 1, l: 0, w: 0, h: 0, weight: 0 };
+  row.id = row.id || rowId;
+  deliveryState.rows.push(row);
+  renderEquipmentTable();
+}
+
+function renderEquipmentTable() {
+  const tbody = document.getElementById('eqTableBody');
+  tbody.innerHTML = deliveryState.rows.map((r, idx) => `
+    <tr data-id="${r.id}">
+      <td class="col-num">${idx + 1}</td>
+      <td>
+        <select onchange="updateEq('${r.id}','catIdx',this.value)">
+          ${deliveryRef.categories.map((c, i) =>
+            `<option value="${i}" ${i === r.catIdx ? 'selected' : ''}>${c.name}</option>`).join('')}
+        </select>
+      </td>
+      <td><input type="text" value="${(r.name || '').replace(/"/g, '&quot;')}" placeholder="Название"
+                 oninput="updateEq('${r.id}','name',this.value)"></td>
+      <td><input type="number" value="${r.qty || ''}" min="0" step="1"
+                 oninput="updateEq('${r.id}','qty',this.value)"></td>
+      <td><input type="number" value="${r.l || ''}" min="0" step="0.01"
+                 oninput="updateEq('${r.id}','l',this.value)"></td>
+      <td><input type="number" value="${r.w || ''}" min="0" step="0.01"
+                 oninput="updateEq('${r.id}','w',this.value)"></td>
+      <td><input type="number" value="${r.h || ''}" min="0" step="0.01"
+                 oninput="updateEq('${r.id}','h',this.value)"></td>
+      <td><input type="number" value="${r.weight || ''}" min="0" step="0.1"
+                 oninput="updateEq('${r.id}','weight',this.value)"></td>
+      <td class="col-actions">
+        <button class="btn-del" title="Удалить" onclick="removeEquipmentRow('${r.id}')">✕</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function updateEq(id, field, value) {
+  const row = deliveryState.rows.find(r => r.id === id);
+  if (!row) return;
+  if (field === 'name') row[field] = value;
+  else if (field === 'catIdx') row[field] = parseInt(value) || 0;
+  else row[field] = parseFloat(value) || 0;
+}
+
+function removeEquipmentRow(id) {
+  deliveryState.rows = deliveryState.rows.filter(r => r.id !== id);
+  if (deliveryState.rows.length === 0) addEquipmentRow();
+  else renderEquipmentTable();
+}
+
+function resetDelivery() {
+  deliveryState.rows = [];
+  deliveryState.lastResult = null;
+  addEquipmentRow();
+  document.getElementById('deliveryResult').style.display = 'none';
+  setStatus('Готово');
+}
+
+// ============================================================
+// СПРАВОЧНИК
+// ============================================================
+function renderRefCategories() {
+  const tbody = document.getElementById('refCategoriesBody');
+  const paletteOptions = (selected) => DELIVERY_PALETTE.map(c =>
+    `<option value="${c}" ${c === selected ? 'selected' : ''}>${c}</option>`
+  ).join('');
+
+  tbody.innerHTML = deliveryRef.categories.map((c, i) => `
+    <tr>
+      <td style="text-align:center;">${i + 1}</td>
+      <td><input type="text" value="${c.name.replace(/"/g, '&quot;')}"
+                 oninput="updateRefCategory(${i},'name',this.value)"></td>
+      <td><input type="number" min="1" step="1" value="${c.tiers}"
+                 oninput="updateRefCategory(${i},'tiers',this.value)"></td>
+      <td>
+        <div class="color-select">
+          <span class="swatch" style="background:${c.color};"></span>
+          <select onchange="updateRefCategory(${i},'color',this.value)">
+            ${paletteOptions(c.color)}
+          </select>
+        </div>
+      </td>
+      <td><button class="btn-del" onclick="removeRefCategory(${i})">✕</button></td>
+    </tr>
+  `).join('');
+}
+
+function updateRefCategory(idx, field, value) {
+  if (!deliveryRef.categories[idx]) return;
+  if (field === 'tiers') deliveryRef.categories[idx].tiers = Math.max(1, parseInt(value) || 1);
+  else if (field === 'color') deliveryRef.categories[idx].color = value;
+  else deliveryRef.categories[idx].name = value;
+  renderEquipmentTable();
+  if (field === 'color') renderRefCategories();
+}
+
+function addRefCategory() {
+  const used = deliveryRef.categories.length % DELIVERY_PALETTE.length;
+  deliveryRef.categories.push({
+    name: 'Новая категория', tiers: 1, color: DELIVERY_PALETTE[used]
+  });
+  renderRefCategories();
+  renderEquipmentTable();
+}
+function removeRefCategory(idx) {
+  if (deliveryRef.categories.length <= 1) {
+    alert('Должна остаться хотя бы одна категория.');
+    return;
+  }
+  deliveryRef.categories.splice(idx, 1);
+  deliveryState.rows.forEach(r => {
+    if (r.catIdx >= deliveryRef.categories.length) r.catIdx = 0;
+  });
+  renderRefCategories();
+  renderEquipmentTable();
+}
+
+function renderRefTC() {
+  const tbody = document.getElementById('refTCBody');
+  tbody.innerHTML = deliveryRef.transport.map((t, i) => {
+    const area = (t.l * t.w).toFixed(2);
+    return `
+      <tr>
+        <td style="text-align:center;">${i + 1}</td>
+        <td><input type="text" value="${t.name.replace(/"/g, '&quot;')}"
+                   oninput="updateRefTC(${i},'name',this.value)"></td>
+        <td><input type="number" min="0" step="0.01" value="${t.l}"
+                   oninput="updateRefTC(${i},'l',this.value)"></td>
+        <td><input type="number" min="0" step="0.01" value="${t.w}"
+                   oninput="updateRefTC(${i},'w',this.value)"></td>
+        <td><input type="number" min="0" step="0.01" value="${t.h}"
+                   oninput="updateRefTC(${i},'h',this.value)"></td>
+        <td style="text-align:right; padding-right:8px; font-weight:600;">${area}</td>
+        <td><input type="number" min="0" step="100" value="${t.capacity}"
+                   oninput="updateRefTC(${i},'capacity',this.value)"></td>
+        <td><input type="text" value="${(t.comment || '').replace(/"/g, '&quot;')}"
+                   oninput="updateRefTC(${i},'comment',this.value)"></td>
+        <td><button class="btn-del" onclick="removeRefTC(${i})">✕</button></td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function updateRefTC(idx, field, value) {
+  if (!deliveryRef.transport[idx]) return;
+  if (field === 'name' || field === 'comment') {
+    deliveryRef.transport[idx][field] = value;
+  } else {
+    deliveryRef.transport[idx][field] = parseFloat(value) || 0;
+  }
+  const tr = document.querySelector(`#refTCBody tr:nth-child(${idx + 1})`);
+  if (tr && (field === 'l' || field === 'w')) {
+    const t = deliveryRef.transport[idx];
+    tr.children[5].textContent = (t.l * t.w).toFixed(2);
+  }
+}
+
+function addRefTC() {
+  deliveryRef.transport.push({
+    name: 'Новый тип ТС', l: 0, w: 0, h: 0, capacity: 0, comment: ''
+  });
+  renderRefTC();
+}
+
+function removeRefTC(idx) {
+  if (deliveryRef.transport.length <= 1) {
+    alert('Должен остаться хотя бы один тип ТС.');
+    return;
+  }
+  deliveryRef.transport.splice(idx, 1);
+  renderRefTC();
+}
+
+function renderRefMargin() {
+  const el = document.getElementById('ref_margin');
+  if (el) el.value = deliveryRef.marginPct;
+  el.oninput = function() {
+    deliveryRef.marginPct = Math.max(0, parseFloat(this.value) || 0);
+  };
+}
+
+// ============================================================
+// РАСЧЁТ ДОСТАВКИ
+// ============================================================
+function calculateDelivery() {
+  const filled = deliveryState.rows.filter(r =>
+    r.qty > 0 && r.l > 0 && r.w > 0 && r.h > 0
+  );
+  if (filled.length === 0) {
+    setStatus('Заполните хотя бы одну позицию', 'error');
+    return;
+  }
+
+  const marginPct = deliveryRef.marginPct || 0;
+  const marginK = 1 + marginPct / 100;
+
+  // === Базовые позиции ===
+  const basePositions = [];
+  let totalWeight = 0;
+  let totalVolume = 0;
+  let maxStackHeight = 0;
+
+  for (const r of deliveryState.rows) {
+    if (!(r.qty > 0 && r.l > 0 && r.w > 0)) {
+      basePositions.push({ ...r, empty: true });
+      continue;
+    }
+    const cat = deliveryRef.categories[r.catIdx];
+    const tiers = cat ? cat.tiers : 1;
+    const color = cat ? cat.color : '#C6EFCE';
+    const catName = cat ? cat.name : '—';
+    const foot = Math.ceil(r.qty / tiers);
+    const stackH = tiers * r.h;
+    const volume = r.l * r.w * r.h * r.qty;
+    const weight = (r.weight || 0) * r.qty;
+
+    basePositions.push({
+      ...r, empty: false, tiers, color, catName, foot, stackH, volume, weight,
+    });
+
+    totalWeight += weight;
+    totalVolume += volume;
+    if (stackH > maxStackHeight) maxStackHeight = stackH;
+  }
+
+  // === Обычные ТС (не негабарит) ===
+  const normalTCs = deliveryRef.transport.filter(t => t.l > 0 && t.w > 0 && t.h > 0);
+  const maxNormalL = normalTCs.reduce((m, t) => Math.max(m, t.l), 0);
+  const maxNormalW = normalTCs.reduce((m, t) => Math.max(m, t.w), 0);
+
+  // === Разделяем позиции: влезающие хотя бы в один обычный ТС и негабаритные ===
+  // Позиция влезает в ТС, если:
+  //   - хотя бы в одном измерении (длина или ширина) единица укладывается вдоль длины кузова
+  //     И
+  //   - поперёк кузова влезает хотя бы 1 единица (по ширине или по длине)
+  const normalPositions = [];
+  const oversizePositions = [];
+
+  function fitsInAnyTC(p) {
+    for (const t of normalTCs) {
+      const calcL = t.l, calcW = t.w;
+      // Вариант A: длина вдоль
+      const perRowA = Math.floor(calcW / p.w);
+      const alongA  = p.l <= calcL && perRowA >= 1;
+      // Вариант B: длина поперёк
+      const perRowB = Math.floor(calcW / p.l);
+      const alongB  = p.w <= calcL && perRowB >= 1;
+      if (alongA || alongB) return true;
+    }
+    return false;
+  }
+
+  for (const p of basePositions) {
+    if (p.empty) {
+      normalPositions.push(p);
+      continue;
+    }
+    if (fitsInAnyTC(p)) {
+      normalPositions.push({ ...p, isOversize: false });
+    } else {
+      oversizePositions.push({ ...p, isOversize: true });
+    }
+  }
+  // === Расчёт по каждому обычному ТС (только для нормальных позиций) ===
+  const tcResults = deliveryRef.transport.map((t, tcIdx) => {
+    const calcW = t.w > 0 ? t.w : 0;
+    const calcL = t.l > 0 ? t.l : 0;
+    const isNegative = (t.l === 0 || t.w === 0 || t.h === 0);
+
+    // Для негабарита — пропускаем, отдельный блок
+    if (isNegative) {
+      return {
+        tc: t, tcIdx,
+        oversize: true,
+        positions: [],
+        canCalculate: false,
+        fits: false,
+        fursByLength: '—',
+        fursByWeight: '—',
+        total: '—',
+        heightOK: null,
+        tcVolume: Infinity,
+        lengthWithMargin: 0,
+        totalLength: 0,
+        totalArea: 0,
+        machines: [],
+        totalMachines: 0,
+        totalLengthPerMachine: [],
+        totalLengthAll: 0,
+      };
+    }
+
+    // Считаем только для normalPositions
+    let hasOversizeForThisTC = false;
+    const positions = normalPositions.map(p => {
+      if (p.empty) {
+        return {
+          ...p, perRow: 0, rowsPerMachine: 0, unitsPerMachine: 0,
+          lengthTotal: 0, area: 0, rotated: false,
+          placeL: 0, placeW: 0, oversize: false, machines: [],
+          totalRows: 0,
+        };
+      }
+      // Ориентация
+      const perRow1 = calcW > 0 ? Math.floor(calcW / p.w) : 0;
+      const perRow2 = calcW > 0 ? Math.floor(calcW / p.l) : 0;
+      const alongFits = calcL > 0 && p.l <= calcL;
+      const acrossFits = calcL > 0 && p.w <= calcL;
+
+      let perRow, placeL, placeW, rotated;
+      if (perRow2 > perRow1 && acrossFits) {
+        perRow = perRow2; placeL = p.w; placeW = p.l; rotated = true;
+      } else if (alongFits) {
+        perRow = perRow1; placeL = p.l; placeW = p.w; rotated = false;
+      } else if (acrossFits) {
+        perRow = perRow2; placeL = p.w; placeW = p.l; rotated = true;
+      } else {
+        // Не влезает в ЭТОТ ТС, но может влезать в другой — помечаем, но не считаем в этом
+        hasOversizeForThisTC = true;
+        return {
+          ...p, perRow: 0, rowsPerMachine: 0, unitsPerMachine: 0,
+          lengthTotal: 0, area: 0, rotated: false,
+          placeL: p.l, placeW: p.w, oversize: true, machines: [],
+          totalRows: 0,
+        };
+      }
+
+      if (perRow <= 0) {
+        hasOversizeForThisTC = true;
+        return {
+          ...p, perRow: 0, rowsPerMachine: 0, unitsPerMachine: 0,
+          lengthTotal: 0, area: 0, rotated: false,
+          placeL, placeW, oversize: true, machines: [],
+          totalRows: 0,
+        };
+      }
+
+      const rowsPerMachine = placeL > 0 ? Math.max(1, Math.floor(calcL / placeL)) : 1;
+      const unitsPerMachine = perRow * rowsPerMachine;
+
+      return {
+        ...p,
+        perRow, rowsPerMachine, unitsPerMachine,
+        placeL, placeW, rotated, oversize: false,
+        machines: [],
+        totalRows: 0,
+      };
+    });
+
+    if (hasOversizeForThisTC) {
+      return {
+        tc: t, tcIdx,
+        oversize: true,
+        positions,
+        canCalculate: false,
+        fits: false,
+        fursByLength: '—',
+        fursByWeight: '—',
+        total: '—',
+        heightOK: null,
+        tcVolume: Infinity,
+        lengthWithMargin: 0,
+        totalLength: 0,
+        totalArea: 0,
+        machines: [],
+        totalMachines: 0,
+        totalLengthPerMachine: [],
+        totalLengthAll: 0,
+      };
+    }
+
+    // === Распределение по машинам с контролем длины ===
+    const machines = [];
+    const capacityL = t.l;
+
+    function getMachine(idx) {
+      while (machines.length <= idx) {
+        machines.push({ items: [], usedByPos: {}, usedLength: 0 });
+      }
+      return machines[idx];
+    }
+
+    for (let pIdx = 0; pIdx < positions.length; pIdx++) {
+      const p = positions[pIdx];
+      if (p.empty || p.oversize) continue;
+
+      const perRow = p.perRow;
+      const rowsPerMachine = p.rowsPerMachine;
+      const capPerMachine = p.unitsPerMachine;
+      const rowLen = p.placeL;
+
+      let remaining = p.foot;
+      let mIdx = 0;
+      let totalRowsForThisPos = 0;
+      const usedMachines = new Set();
+
+      while (remaining > 0) {
+        const m = getMachine(mIdx);
+        const taken = m.usedByPos[pIdx] || 0;
+        const freeByCount = capPerMachine - taken;
+        const freeByLen = rowLen > 0
+          ? Math.floor((capacityL - m.usedLength) / rowLen) * perRow
+          : 0;
+
+        let canPut = Math.min(remaining, freeByCount, freeByLen);
+        if (canPut > 0) {
+          const maxRows = Math.min(
+            rowsPerMachine - Math.ceil(taken / perRow),
+            Math.floor((capacityL - m.usedLength) / rowLen)
+          );
+          const canRows = Math.min(maxRows, Math.ceil(remaining / perRow));
+          if (canRows <= 0) canPut = 0;
+          else canPut = Math.min(remaining, canRows * perRow);
+        }
+
+        if (canPut <= 0) {
+          mIdx++;
+          if (mIdx > 1000) { console.error('Overflow', pIdx); break; }
+          continue;
+        }
+
+        const rowsPut = Math.ceil(canPut / perRow);
+        totalRowsForThisPos += rowsPut;
+        m.usedByPos[pIdx] = taken + canPut;
+        m.usedLength += rowsPut * rowLen;
+        m.items.push({ posIdx: pIdx, count: canPut, rows: rowsPut });
+        usedMachines.add(mIdx);
+
+        remaining -= canPut;
+        if (remaining > 0) mIdx++;
+      }
+
+      p.machines = Array.from(usedMachines).map(i => i + 1).sort((a,b)=>a-b);
+      p.totalRows = totalRowsForThisPos;
+    }
+
+    const totalLengthPerMachine = machines.map(m => m.usedLength);
+    const totalMachines = machines.length;
+    const totalLengthAll = totalLengthPerMachine.reduce((a, b) => a + b, 0);
+
+    let fursByWeight = null;
+    if (t.capacity > 0 && totalWeight > 0) fursByWeight = Math.ceil(totalWeight / t.capacity);
+    else if (totalWeight === 0) fursByWeight = '—';
+    else fursByWeight = 'инд. расчёт';
+
+    let total = totalMachines;
+    if (typeof fursByWeight === 'number' && fursByWeight > total) total = fursByWeight;
+
+    const heightOK = t.h > 0 ? maxStackHeight <= t.h : null;
+    const tcVolume = (t.l > 0 && t.w > 0 && t.h > 0) ? t.l * t.w * t.h : Infinity;
+
+    return {
+      tc: t, tcIdx,
+      oversize: false,
+      positions,
+      machines,
+      totalLengthPerMachine,
+      totalLengthAll,
+      totalMachines,
+      lengthWithMargin: totalMachines > 0 ? totalLengthPerMachine[0] * marginK : 0,
+      fursByLength: totalMachines,
+      fursByWeight,
+      total,
+      heightOK,
+      tcVolume,
+      canCalculate: true,
+      fits: totalMachines > 0 && heightOK !== false,
+    };
+  });
+
+  // === Расчёт негабаритной платформы (если есть негабаритные позиции) ===
+  let oversizePlatform = null;
+  if (oversizePositions.length > 0) {
+    // Для каждой негабаритной позиции: раскладка в ряд по ширине платформы
+    // Ширина платформы = max ширина позиции (с запасом)
+    // Длина платформы = сумма (ряды × длина) по всем позициям
+    // Высота платформы = max высота стопки
+
+    const platPositions = oversizePositions.map(p => {
+      const perRow = 1; // на платформе кладём по 1 в ряд (ширина не ограничена жёстко)
+      const rows = p.foot;
+      const lengthTotal = rows * p.l;
+      const area = p.foot * p.l * p.w;
+      return {
+        ...p,
+        perRow, rowsPerMachine: rows, unitsPerMachine: p.foot,
+        placeL: p.l, placeW: p.w, rotated: false,
+        lengthTotal, area,
+        machines: [1],  // одна платформа
+        totalRows: rows,
+      };
+    });
+
+    const platformLen = platPositions.reduce((s, p) => s + p.lengthTotal, 0);
+    const platformW = platPositions.reduce((m, p) => Math.max(m, p.placeW), 0);
+    const platformH = platPositions.reduce((m, p) => Math.max(m, p.stackH), 0);
+
+    oversizePlatform = {
+      positions: platPositions,
+      length: platformLen,
+      width: platformW,
+      height: platformH,
+      totalWeight,
+      totalVolume,
+    };
+  }
+
+  // === Приоритет ===
+  let bestIdx = -1;
+  let bestTotal = Infinity;
+  let bestVol = Infinity;
+  tcResults.forEach((r, i) => {
+    if (!r.canCalculate || r.oversize) return;
+    if (r.heightOK === false) return;
+    if (typeof r.total !== 'number') return;
+    if (r.total < bestTotal
+        || (r.total === bestTotal && r.tcVolume < bestVol)) {
+      bestTotal = r.total;
+      bestVol = r.tcVolume;
+      bestIdx = i;
+    }
+  });
+
+  if (bestIdx === -1) {
+    tcResults.forEach((r, i) => {
+      if (!r.canCalculate || r.oversize) return;
+      if (typeof r.total !== 'number') return;
+      if (r.total < bestTotal
+          || (r.total === bestTotal && r.tcVolume < bestVol)) {
+        bestTotal = r.total;
+        bestVol = r.tcVolume;
+        bestIdx = i;
+      }
+    });
+  }
+
+  deliveryState.lastResult = {
+    basePositions, normalPositions, oversizePositions,
+    tcResults, bestIdx, oversizePlatform,
+    totalWeight, totalVolume, maxStackHeight, marginPct,
+  };
+
+  renderDeliveryResult();
+  updateAttachButtonState();
+  setStatus('Готово');
+}
+function renderDeliveryResult() {
+  const R = deliveryState.lastResult;
+  if (!R) return;
+
+  document.getElementById('deliveryResult').style.display = 'block';
+
+  // === Сводка ===
+  document.getElementById('deliverySummary').innerHTML = `
+    <div class="result-grid">
+      <div class="result-item">
+        <div class="label">Вес груза</div>
+        <div class="value">${R.totalWeight.toFixed(0)} <span style="font-size:14px;">кг</span></div>
+      </div>
+      <div class="result-item">
+        <div class="label">Объём (справочно)</div>
+        <div class="value">${R.totalVolume.toFixed(2)} <span style="font-size:14px;">м³</span></div>
+      </div>
+      <div class="result-item">
+        <div class="label">Макс. высота стопки</div>
+        <div class="value">${R.maxStackHeight.toFixed(2)} <span style="font-size:14px;">м</span></div>
+      </div>
+      <div class="result-item">
+        <div class="label">Запас длины</div>
+        <div class="value">${R.marginPct} <span style="font-size:14px;">%</span></div>
+      </div>
+    </div>
+    <p style="color:#7f8c8d; font-size:12px; margin-top:10px;">
+      Раскладка по машинам — с учётом того, что единицу оборудования нельзя разделить.
+    </p>
+  `;
+
+  // === Предупреждение о негабарите ===
+  const oversizeAlert = document.getElementById('oversizeAlert');
+  if (oversizeAlert) {
+    if (R.oversizePositions && R.oversizePositions.length > 0) {
+      oversizeAlert.style.display = 'block';
+      oversizeAlert.innerHTML = `
+        <div class="alert alert-warning" style="margin-bottom:0;">
+          <strong>⚠ Есть негабаритные позиции (${R.oversizePositions.length} шт.)</strong> — они не влезают ни в один обычный ТС.
+          Для них выделяется отдельная платформа.
+        </div>
+      `;
+    } else {
+      oversizeAlert.style.display = 'none';
+    }
+  }
+
+  const bestResult = R.bestIdx >= 0 ? R.tcResults[R.bestIdx] : null;
+
+  // === Таблица ТС ===
+  const tcBody = document.getElementById('deliveryTCBody');
+  tcBody.innerHTML = R.tcResults.map((r, i) => {
+    const t = r.tc;
+    let heightCell = '—';
+    if (r.heightOK === true) heightCell = '<span class="good">Да</span>';
+    else if (r.heightOK === false) heightCell = '<span class="bad">НЕТ</span>';
+
+    const isBest = (i === R.bestIdx);
+    const rowStyle = isBest
+      ? 'background:#e8f5e9; box-shadow:inset 3px 0 0 #27ae60;'
+      : (r.oversize ? 'background:#fff3f3;' : '');
+
+    let totalDisplay;
+    if (r.tc.l === 0) {
+      totalDisplay = `<span style="color:#e67e22; font-weight:600;">трал</span>`;
+    } else if (r.oversize) {
+      totalDisplay = `<span class="bad">✗ не влезает</span>`;
+    } else if (typeof r.total === 'number') {
+      totalDisplay = `<span class="total">${r.total}</span>`;
+    } else {
+      totalDisplay = `<span style="color:#888;">${r.total}</span>`;
+    }
+
+    return `<tr style="${rowStyle}">
+      <td><strong>${t.name}</strong>${isBest ? ' <span style="color:#27ae60; font-size:11px;">★ приоритет</span>' : ''}</td>
+      <td>${t.l > 0 ? t.l.toFixed(2) : '—'}</td>
+      <td>${t.w > 0 ? t.w.toFixed(2) : '—'}</td>
+      <td>${t.h > 0 ? t.h.toFixed(2) : '—'}</td>
+      <td>${t.capacity > 0 ? t.capacity.toLocaleString('ru-RU') : '—'}</td>
+      <td>${r.tc.l === 0 ? '—' : (r.oversize ? '—' : r.fursByLength)}</td>
+      <td>${r.fursByWeight}</td>
+      <td>${totalDisplay}</td>
+      <td>${heightCell}</td>
+    </tr>`;
+  }).join('');
+
+  // === По позициям ===
+  const posBody = document.getElementById('deliveryPositionsBody');
+  const posFooter = document.getElementById('deliveryPositionsFooter');
+
+  // Строим объединённый список: сначала влезающие (с раскладкой по ТС), потом негабарит
+  let posRows = '';
+
+  if (bestResult && !bestResult.oversize) {
+    posRows += bestResult.positions.map((p, idx) => {
+      if (p.empty) return '';
+      const orientMark = p.rotated
+        ? ' <span title="Повёрнута на 90°" style="color:#e67e22;">⟳</span>'
+        : '';
+      const mach = p.machines.length > 0
+        ? p.machines.map(m => `№${m}`).join(', ')
+        : '—';
+      return `<tr>
+        <td class="col-num">${idx + 1}</td>
+        <td>${p.name || p.catName}</td>
+        <td>${p.qty}</td>
+        <td>${p.foot}</td>
+        <td>${p.perRow}${orientMark}</td>
+        <td>${p.rowsPerMachine}</td>
+        <td>${p.unitsPerMachine}</td>
+        <td><strong>${mach}</strong></td>
+      </tr>`;
+    }).join('');
+  }
+
+  if (R.oversizePlatform) {
+    posRows += R.oversizePlatform.positions.map((p, idx) => {
+      return `<tr style="background:#fff8e1;">
+        <td class="col-num">${idx + 1}</td>
+        <td>${p.name || p.catName} <span style="color:#e67e22; font-weight:600;">⚠ негабарит</span></td>
+        <td>${p.qty}</td>
+        <td>${p.foot}</td>
+        <td>${p.perRow}</td>
+        <td>${p.rowsPerMachine}</td>
+        <td>${p.unitsPerMachine}</td>
+        <td><strong style="color:#e67e22;">трал</strong></td>
+      </tr>`;
+    }).join('');
+  }
+
+  if (!posRows) {
+    posBody.innerHTML = `<tr><td colspan="8" style="color:#888; padding:12px; text-align:center;">
+      Нет ТС, для которого можно рассчитать выкладку.
+    </td></tr>`;
+    posFooter.innerHTML = '';
+  } else {
+    posBody.innerHTML = posRows;
+    posFooter.innerHTML = bestResult && !bestResult.oversize
+      ? `<tr>
+           <td colspan="7" style="text-align:right; padding-right:12px;">
+             Всего машин (для <strong>${bestResult.tc.name}</strong>):
+           </td>
+           <td><strong>${bestResult.totalMachines}</strong></td>
+         </tr>`
+      : '';
+  }
+
+  // Заголовок таблицы
+  const posCard = document.querySelector('#deliveryResult .card:nth-child(2)');
+  if (posCard) {
+    const h3 = posCard.querySelector('h3');
+    if (h3) {
+      h3.textContent = bestResult
+        ? `По позициям (приоритетный ТС — ${bestResult.tc.name})`
+        : 'По позициям';
+    }
+  }
+
+  // === Приоритетный ТС + платформа ===
+  const bestBlock = document.getElementById('deliveryBestTC');
+  if (bestBlock) {
+    let html = '';
+
+    if (bestResult && !bestResult.oversize) {
+      const t = bestResult.tc;
+      const tcVolume = (t.l * t.w * t.h).toFixed(2);
+      html += `
+        <div style="margin-top:15px; padding:15px 20px;
+                    background:linear-gradient(135deg,#e8f5e9 0%,#f0fdf4 100%);
+                    border-left:5px solid #27ae60; border-radius:6px;">
+          <div style="font-size:12px; color:#155724; text-transform:uppercase;
+                      letter-spacing:0.5px; margin-bottom:6px;">
+            ★ Приоритетный вариант доставки
+          </div>
+          <div style="font-size:18px; font-weight:bold; color:#155724; margin-bottom:6px;">
+            ${t.name}
+          </div>
+          <div style="font-size:13px; color:#2c3e50;">
+            Объём кузова: <strong>${tcVolume} м³</strong>
+            &nbsp;·&nbsp;
+            Требуется машин: <strong>${bestResult.total}</strong>
+          </div>
+        </div>
+      `;
+    }
+
+    if (R.oversizePlatform) {
+      const p = R.oversizePlatform;
+      html += `
+        <div style="margin-top:15px; padding:15px 20px;
+                    background:linear-gradient(135deg,#fff8e1 0%,#ffecb3 100%);
+                    border-left:5px solid #e67e22; border-radius:6px;">
+          <div style="font-size:12px; color:#7d4e00; text-transform:uppercase;
+                      letter-spacing:0.5px; margin-bottom:6px;">
+            ⚠ Негабаритная платформа (трал)
+          </div>
+          <div style="font-size:18px; font-weight:bold; color:#7d4e00; margin-bottom:6px;">
+            Требуется отдельный трал
+          </div>
+          <div style="font-size:13px; color:#2c3e50;">
+            Габариты платформы:
+            <strong>${p.length.toFixed(2)} × ${p.width.toFixed(2)} × ${p.height.toFixed(2)} м</strong>
+            (Д × Ш × В)
+          </div>
+        </div>
+      `;
+    }
+
+    if (!html) {
+      html = `
+        <div style="margin-top:15px; padding:15px 20px;
+                    background:#fff3cd; border-left:5px solid #ffc107;
+                    border-radius:6px; color:#856404; font-size:13px;">
+          Не удалось определить приоритетный ТС.
+        </div>
+      `;
+    }
+
+    // === Итоговая строка ===
+    let summaryLines = [];
+    if (bestResult && !bestResult.oversize && typeof bestResult.total === 'number') {
+      summaryLines.push(
+        `<div style="display:flex; justify-content:space-between; padding:6px 0;
+                     border-bottom:1px dashed rgba(0,0,0,0.1);">
+           <span style="color:#2c3e50;">${bestResult.tc.name}</span>
+           <span style="font-weight:700; color:#155724;">${bestResult.total} машин${bestResult.total === 1 ? 'а' : (bestResult.total >= 2 && bestResult.total <= 4 ? 'ы' : '')}</span>
+         </div>`
+      );
+    }
+    if (R.oversizePlatform) {
+      summaryLines.push(
+        `<div style="display:flex; justify-content:space-between; padding:6px 0;">
+           <span style="color:#2c3e50;">Трал негабаритный</span>
+           <span style="font-weight:700; color:#7d4e00;">1 машина</span>
+         </div>`
+      );
+    }
+
+    if (summaryLines.length > 0) {
+      html += `
+        <div style="margin-top:15px; padding:15px 20px;
+                    background:#f8f9fa; border-left:5px solid #1F4E78; border-radius:6px;">
+          <div style="font-size:12px; color:#1F4E78; text-transform:uppercase;
+                      letter-spacing:0.5px; margin-bottom:8px; font-weight:700;">
+            Итого
+          </div>
+          ${summaryLines.join('')}
+        </div>
+      `;
+    }
+
+    bestBlock.innerHTML = html;
+  }
+
+  renderDelivery3DPanel();
+  document.getElementById('deliveryResult').scrollIntoView({ behavior: 'smooth' });
+}
+// ============================================================
+// 3D-ПАНЕЛЬ
+// ============================================================
+function renderDelivery3DPanel() {
+  const R = deliveryState.lastResult;
+  const card = document.getElementById('deliveryThreeCard');
+  const sel = document.getElementById('deliveryThreeTC');
+  if (!R || !card || !sel) return;
+
+  card.style.display = 'block';
+
+  const fitting = R.tcResults
+    .map((r, i) => ({ r, i }))
+    .filter(x => x.r.fits);
+
+  sel.disabled = false;
+  // Селект: обычные ТС + опция «Негабаритная платформа» (если есть)
+  let options = fitting.map(x =>
+    `<option value="${x.i}" ${x.i === R.bestIdx ? 'selected' : ''}>${x.r.tc.name}</option>`
+  ).join('');
+
+  if (R.oversizePlatform) {
+    options += `<option value="__oversize__">⚠ Негабаритная платформа (трал)</option>`;
+  }
+
+  sel.innerHTML = options;
+
+  if (!options) {
+    sel.innerHTML = '<option>— нет подходящих ТС —</option>';
+    sel.disabled = true;
+    document.getElementById('deliveryThreeAlert').style.display = 'block';
+    document.getElementById('deliveryThreeAlert').innerHTML =
+      '⚠ Груз не влезает ни в один из типов ТС.';
+    return;
+  }
+
+  document.getElementById('deliveryThreeAlert').style.display = 'none';
+  renderDelivery3D();
+}
+
+let deliveryThreeRenderer = null;
+let deliveryThreeScene = null;
+let deliveryThreeCamera = null;
+
+function renderDelivery3D() {
+  const R = deliveryState.lastResult;
+  const sel = document.getElementById('deliveryThreeTC');
+  if (!R || !sel) return;
+
+  const selVal = sel.value;
+  const canvas = document.getElementById('deliveryThreeCanvas');
+  const wrap = canvas.parentElement;
+  if (!wrap || wrap.clientWidth === 0) return;
+
+  canvas.width = wrap.clientWidth;
+  canvas.height = wrap.clientHeight;
+
+  if (deliveryThreeRenderer) {
+    deliveryThreeRenderer.dispose();
+    deliveryThreeRenderer = null;
+  }
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(45, canvas.width / canvas.height, 1, 200000);
+  camera.up.set(0, 0, 1);
+
+  const renderer = new THREE.WebGLRenderer({
+    canvas: canvas, antialias: true, preserveDrawingBuffer: true, alpha: true
+  });
+  renderer.setSize(canvas.width, canvas.height);
+  renderer.setPixelRatio(window.devicePixelRatio);
+
+  scene.add(new THREE.AmbientLight(0xffffff, 0.85));
+  const dl = new THREE.DirectionalLight(0xffffff, 0.5);
+  dl.position.set(1, -1, 1);
+  scene.add(dl);
+  const dl2 = new THREE.DirectionalLight(0xffffff, 0.3);
+  dl2.position.set(-1, 1, 0.5);
+  scene.add(dl2);
+
+  // === Негабаритная платформа ===
+  if (selVal === '__oversize__' && R.oversizePlatform) {
+    const plat = R.oversizePlatform;
+    const platL = plat.length;
+    const platW = plat.width + 0.4;    // запас по ширине
+    const platH = 0.3;
+
+    // Платформа
+    const platGeo = new THREE.BoxGeometry(platL, platW, platH);
+    const platMat = new THREE.MeshLambertMaterial({
+      color: 0xf6b26b, transparent: true, opacity: 0.6
+    });
+    const platMesh = new THREE.Mesh(platGeo, platMat);
+    platMesh.position.set(platL/2, platW/2, platH/2);
+    scene.add(platMesh);
+
+    const platEdges = new THREE.EdgesGeometry(platGeo);
+    const platLine = new THREE.LineSegments(platEdges,
+      new THREE.LineBasicMaterial({ color: 0x7d4e00 }));
+    platLine.position.copy(platMesh.position);
+    scene.add(platLine);
+
+    // Груз на платформе
+    let cursorX = 0;
+    for (const p of plat.positions) {
+      const unitL = p.placeL, unitW = p.placeW, unitH = p.h;
+      const perRow = p.perRow;
+      const rows = Math.ceil(p.foot / perRow);
+      const rowWidthUsed = perRow * unitW;
+      const rowOffsetY = (platW - rowWidthUsed) / 2;
+
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < perRow; c++) {
+          const idxInStack = r * perRow + c;
+          if (idxInStack >= p.foot) continue;
+          for (let tier = 0; tier < p.tiers; tier++) {
+            const px = cursorX + r * unitL;
+            const py = rowOffsetY + c * unitW;
+            const pz = platH + tier * unitH;
+            addUnitBox(scene, px, py, pz, unitL, unitW, unitH, p.color);
+          }
+        }
+      }
+      cursorX += rows * unitL;
+    }
+
+    const center = new THREE.Vector3(platL / 2, platW / 2, platH);
+    const radius = Math.max(platL, platW, platH) * 0.9;
+    setupCameraAndControls(canvas, camera, center, radius, renderer, scene);
+    return;
+  }
+
+  // === Обычный ТС ===
+  const tcIdx = parseInt(selVal);
+  const tr = R.tcResults[tcIdx];
+  if (!tr || !tr.fits) return;
+
+  const t = tr.tc;
+  const GAP = 2;
+  const coachL = t.l, coachW = t.w, coachH = t.h;
+  const N = tr.machines.length;
+
+  for (let mIdx = 0; mIdx < N; mIdx++) {
+    const offsetX = mIdx * (coachL + GAP);
+
+    const cGeo = new THREE.BoxGeometry(coachL, coachW, coachH);
+    const cMat = new THREE.MeshLambertMaterial({
+      color: 0x90a4ae, transparent: true, opacity: 0.08, side: THREE.DoubleSide
+    });
+    const cMesh = new THREE.Mesh(cGeo, cMat);
+    cMesh.position.set(offsetX + coachL/2, coachW/2, coachH/2);
+    scene.add(cMesh);
+
+    const cEdges = new THREE.EdgesGeometry(cGeo);
+    const cLine = new THREE.LineSegments(cEdges,
+      new THREE.LineBasicMaterial({ color: 0x455a64 }));
+    cLine.position.copy(cMesh.position);
+    scene.add(cLine);
+
+    const fGeo = new THREE.PlaneGeometry(coachL, coachW);
+    const fMat = new THREE.MeshBasicMaterial({ color: 0xcfd8dc, side: THREE.DoubleSide });
+    const fMesh = new THREE.Mesh(fGeo, fMat);
+    fMesh.position.set(offsetX + coachL/2, coachW/2, 0.001);
+    scene.add(fMesh);
+
+    const labelSprite = makeNumberSprite('№' + (mIdx + 1));
+    labelSprite.position.set(offsetX + 0.5, coachW + 0.6, coachH + 0.5);
+    scene.add(labelSprite);
+
+    const items = tr.machines[mIdx].items || [];
+    let cursorX = 0;
+
+    for (const it of items) {
+      const p = tr.positions[it.posIdx];
+      const unitL = p.placeL, unitW = p.placeW, unitH = p.h;
+      const perRow = p.perRow;
+      const rows = Math.ceil(it.count / perRow);
+      const rowWidthUsed = perRow * unitW;
+      const rowOffsetY = (coachW - rowWidthUsed) / 2;
+
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < perRow; c++) {
+          const idxInStack = r * perRow + c;
+          if (idxInStack >= it.count) continue;
+          for (let tier = 0; tier < p.tiers; tier++) {
+            const px = offsetX + cursorX + r * unitL;
+            const py = rowOffsetY + c * unitW;
+            const pz = tier * unitH;
+            addUnitBox(scene, px, py, pz, unitL, unitW, unitH, p.color);
+          }
+        }
+      }
+      cursorX += rows * unitL;
+    }
+  }
+
+  const totalSceneLen = N * coachL + (N - 1) * GAP;
+  const center = new THREE.Vector3(totalSceneLen / 2, coachW / 2, coachH / 2);
+  const radius = Math.max(totalSceneLen, coachW, coachH) * 0.75;
+  setupCameraAndControls(canvas, camera, center, radius, renderer, scene);
+}
+
+function addUnitBox(scene, px, py, pz, unitL, unitW, unitH, colorHex) {
+  const geo = new THREE.BoxGeometry(unitL * 0.96, unitW * 0.96, unitH * 0.94);
+  const mat = new THREE.MeshLambertMaterial({
+    color: parseInt(colorHex.replace('#', ''), 16),
+    transparent: true, opacity: 0.85
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.set(px + unitL/2, py + unitW/2, pz + unitH/2);
+  scene.add(mesh);
+
+  const edges = new THREE.EdgesGeometry(geo);
+  const line = new THREE.LineSegments(edges,
+    new THREE.LineBasicMaterial({ color: 0x37474f }));
+  line.position.copy(mesh.position);
+  scene.add(line);
+}
+
+function makeNumberSprite(text) {
+  const c = document.createElement('canvas');
+  c.width = 256; c.height = 128;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = 'rgba(31,78,120,0.9)';
+  ctx.fillRect(0, 0, 256, 128);
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 72px Arial';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, 128, 68);
+  const tex = new THREE.CanvasTexture(c);
+  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true });
+  const sprite = new THREE.Sprite(mat);
+  sprite.scale.set(2, 1, 1);
+  return sprite;
+}
+
+function setupCameraAndControls(canvas, camera, center, radius, renderer, scene) {
+  let theta = Math.PI / 3.2;
+  let phi = Math.PI / 2.6;
+
+  function updateCamera() {
+    camera.position.set(
+      center.x + radius * Math.sin(phi) * Math.cos(theta),
+      center.y + radius * Math.sin(phi) * Math.sin(theta),
+      center.z + radius * Math.cos(phi)
+    );
+    camera.lookAt(center);
+  }
+  updateCamera();
+
+  let isDragging = false, prevX = 0, prevY = 0;
+  canvas.addEventListener('mousedown', e => {
+    isDragging = true; prevX = e.clientX; prevY = e.clientY;
+  });
+  window.addEventListener('mouseup', () => isDragging = false);
+  window.addEventListener('mousemove', e => {
+    if (!isDragging) return;
+    theta -= (e.clientX - prevX) * 0.008;
+    phi -= (e.clientY - prevY) * 0.008;
+    phi = Math.max(0.15, Math.min(Math.PI - 0.15, phi));
+    prevX = e.clientX; prevY = e.clientY;
+    updateCamera();
+  });
+  canvas.addEventListener('wheel', e => {
+    e.preventDefault();
+    const s = e.deltaY > 0 ? 1.1 : 0.9;
+    camera.position.sub(center).multiplyScalar(s).add(center);
+    camera.lookAt(center);
+  }, { passive: false });
+
+  deliveryThreeRenderer = renderer;
+  deliveryThreeScene = scene;
+  deliveryThreeCamera = camera;
+
+  function animate() {
+    if (deliveryThreeRenderer !== renderer) return;
+    requestAnimationFrame(animate);
+    renderer.render(scene, camera);
+  }
+  animate();
+}
+// === Инициализация страницы доставки ===
+function initDeliveryPage() {
+  deliveryState.rows = [];
+  addEquipmentRow();
+  renderRefCategories();
+  renderRefTC();
+  renderRefMargin();
+  loadProjects();
+  renderProjectsList();
+  updateAttachButtonState();
+}
+
+// ============================================================
+// ============  ЧАСТЬ 1 (продолжение): ЛОГИКА ПРОДУКТА  ======
+// ============================================================
+
+function calculateProduct() {
+  const prodL = getVal('p_prod_l');
+  const prodW = getVal('p_prod_w');
+  const prodH = getVal('p_prod_h');
+  const perRow = getVal('p_per_row');
+  const perLayer = getVal('p_per_layer');
+  const layers = getVal('p_layers');
+  const boxL = getVal('p_box_l');
+  const boxW = getVal('p_box_w');
+  const boxH = getVal('p_box_h');
+
+  if (!prodL || !prodW || !prodH || !perRow || !perLayer || !layers || !boxL || !boxW || !boxH) {
+    setStatus('Заполните все поля', 'error');
+    return;
+  }
+
+  const orientations = [
+    { code: 'A', name: 'Вдоль короба',
+      desc: 'Длинная сторона продукта — вдоль длины короба',
+      bl: prodL, bw: prodW, bh: prodH, icon: '➡️' },
+    { code: 'B', name: 'Поперёк короба',
+      desc: 'Продукт повёрнут на 90° в плоскости (длинная сторона — поперёк)',
+      bl: prodW, bw: prodL, bh: prodH, icon: '⬇️' },
+    { code: 'C', name: 'На боку (вдоль)',
+      desc: 'Продукт лежит на боку, длинная сторона — вдоль длины короба',
+      bl: prodL, bw: prodH, bh: prodW, icon: '🔄' },
+    { code: 'D', name: 'На боку (поперёк)',
+      desc: 'Продукт лежит на боку, повёрнут на 90°',
+      bl: prodH, bw: prodL, bh: prodW, icon: '↩️' },
+  ];
+
+  const options = orientations.map((o) => {
+    const opt1 = {
+      groupL: perRow * o.bl, groupW: perLayer * o.bw, groupH: layers * o.bh,
+      perRow: perRow, perLayer: perLayer,
+    };
+    const opt2 = {
+      groupL: perLayer * o.bl, groupW: perRow * o.bw, groupH: layers * o.bh,
+      perRow: perLayer, perLayer: perRow,
+    };
+
+    let chosen = opt1;
+    let swapped = false;
+    if (opt2.groupL <= boxL && opt2.groupW <= boxW &&
+        (opt2.groupL + opt2.groupW < opt1.groupL + opt1.groupW)) {
+      chosen = opt2;
+      swapped = true;
+    }
+
+    const fits = chosen.groupL <= boxL && chosen.groupW <= boxW && chosen.groupH <= boxH;
+
+    return {
+      ...o,
+      perRow: chosen.perRow, perLayer: chosen.perLayer,
+      groupL: chosen.groupL, groupW: chosen.groupW, groupH: chosen.groupH,
+      fits, swapped, boxL, boxW, boxH, layers,
+    };
+  });
+
+  productState = {
+    prodL, prodW, prodH, perRow, perLayer, layers,
+    boxL, boxW, boxH,
+    variants: [], activeVariant: 0,
+    options: options, optimal: null, palletResult: null,
+    threeRenderer: null, threeScene: null, threeCamera: null,
+  };
+
+  showOrientDialog(options);
+}
+
+function showOrientDialog(options) {
+  const container = document.getElementById('orientOptions');
+  container.innerHTML = options.map((o, idx) => {
+    const statusIcon = o.fits ? '✅' : '⚠️';
+    const statusText = o.fits ? 'Помещается' : 'НЕ помещается';
+    const statusColor = o.fits ? '#27ae60' : '#c0392b';
+    const swapText = o.swapped ? ' (с поворотом)' : '';
+
+    return `
+      <div class="orient-option" onclick="selectOrientation(${idx})"
+           style="border:2px solid ${o.fits ? '#27ae60' : '#e0e0e0'};
+                  border-radius:8px; padding:15px; cursor:pointer;
+                  transition: all 0.2s; background: ${o.fits ? '#f0fdf4' : '#fafbfc'};"
+           onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 12px rgba(0,0,0,0.1)'"
+           onmouseout="this.style.transform='none';this.style.boxShadow='none'">
+        <div style="font-size:24px; margin-bottom:8px;">${o.icon}</div>
+        <div style="font-weight:bold; color:#1F4E78; margin-bottom:5px; font-size:15px;">
+          ${o.name}
+        </div>
+        <div style="font-size:12px; color:#7f8c8d; margin-bottom:10px; line-height:1.4;">
+          ${o.desc}${swapText}
+        </div>
+        <div style="font-size:12px; padding-top:10px; border-top:1px dashed #d0d7de;">
+          <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+            <span style="color:#7f8c8d;">Группа продукта:</span>
+            <span style="font-weight:600;">${o.groupL} × ${o.groupW} × ${o.groupH}</span>
+          </div>
+          <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+            <span style="color:#7f8c8d;">Раскладка:</span>
+            <span style="font-weight:600;">${o.perRow} × ${o.perLayer} × ${o.layers}</span>
+          </div>
+          <div style="display:flex; justify-content:space-between; margin-top:8px;">
+            <span style="color:${statusColor}; font-weight:600;">
+              ${statusIcon} ${statusText}
+            </span>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  document.getElementById('orientModal').classList.add('active');
+}
+
+function closeOrientDialog() {
+  document.getElementById('orientModal').classList.remove('active');
+}
+
+function selectOrientation(idx) {
+  if (!productState.options || !productState.options[idx]) {
+    alert('Ошибка: вариант не найден.');
+    return;
+  }
+
+  const opt = productState.options[idx];
+  productState.activeVariant = idx;
+  closeOrientDialog();
+
+  const boxL = productState.boxL;
+  const boxW = productState.boxW;
+  const boxH = productState.boxH;
+
+  const actualFits = opt.groupL <= boxL && opt.groupW <= boxW && opt.groupH <= boxH;
+
+  const variant = {
+    name: opt.name, desc: opt.desc, code: opt.code,
+    bl: opt.bl, bw: opt.bw, bh: opt.bh,
+    perRow: opt.perRow, perLayer: opt.perLayer, layers: opt.layers,
+    groupL: opt.groupL, groupW: opt.groupW, groupH: opt.groupH,
+    fits: actualFits, boxL, boxW, boxH,
+    hasOverflow: !actualFits,
+  };
+
+  productState.variants = [variant];
+  productState.optimal = {
+    L: opt.groupL + 20,
+    W: opt.groupW + 20,
+    H: opt.groupH + 20,
+    groupL: opt.groupL, groupW: opt.groupW, groupH: opt.groupH,
+    perRow: opt.perRow, perLayer: opt.perLayer,
+  };
+
+  document.getElementById('productResult').style.display = 'block';
+  document.getElementById('palletResultCard').style.display = 'none';
+
+  renderProductResult();
+  updateAttachButtonState();
+  setStatus('Готово');
+}
+
+function renderProductResult() {
+  const { variants, boxL, boxW, boxH, optimal } = productState;
+  const v = variants[0];
+
+  if (!v) {
+    document.getElementById('productCompare').innerHTML =
+      '<div class="alert alert-danger">Ошибка: данные не переданы.</div>';
+    return;
+  }
+
+  const actualFits = v.groupL <= boxL && v.groupW <= boxW && v.groupH <= boxH;
+  v.fits = actualFits;
+  v.hasOverflow = !actualFits;
+
+  document.getElementById('currBoxLabel').textContent =
+    `${boxL} × ${boxW} × ${boxH} мм (${v.name})`;
+  document.getElementById('optBoxLabel').textContent =
+    `${optimal.L} × ${optimal.W} × ${optimal.H} мм`;
+
+  const compareHTML = `
+    <div class="compare-grid">
+      <div class="compare-card now">
+        <h4>📦 Сейчас</h4>
+        <div class="dim"><span class="k">Короб (Д×Ш×В)</span><span class="v">${boxL} × ${boxW} × ${boxH}</span></div>
+        <div class="dim"><span class="k">Группа продукта</span><span class="v">${v.groupL} × ${v.groupW} × ${v.groupH}</span></div>
+        <div class="dim"><span class="k">Запас по длине</span>
+          <span class="v" style="color:${boxL - v.groupL >= 0 ? '#27ae60' : '#c0392b'};">
+            ${boxL - v.groupL} мм
+          </span>
+        </div>
+        <div class="dim"><span class="k">Запас по ширине</span>
+          <span class="v" style="color:${boxW - v.groupW >= 0 ? '#27ae60' : '#c0392b'};">
+            ${boxW - v.groupW} мм
+          </span>
+        </div>
+        <div class="dim"><span class="k">Запас по высоте</span>
+          <span class="v" style="color:${boxH - v.groupH >= 0 ? '#27ae60' : '#c0392b'};">
+            ${boxH - v.groupH} мм
+          </span>
+        </div>
+        <div class="dim"><span class="k">Раскладка</span><span class="v">${v.perRow} × ${v.perLayer} × ${v.layers}</span></div>
+      </div>
+      <div class="compare-card opt">
+        <h4>✨ Оптимально</h4>
+        <div class="dim"><span class="k">Короб (Д×Ш×В)</span><span class="v">${optimal.L} × ${optimal.W} × ${optimal.H}</span></div>
+        <div class="dim"><span class="k">Группа продукта</span><span class="v">${optimal.groupL} × ${optimal.groupW} × ${optimal.groupH}</span></div>
+        <div class="dim"><span class="k">Запас по длине</span><span class="v">10 + 10 мм</span></div>
+        <div class="dim"><span class="k">Запас по ширине</span><span class="v">10 + 10 мм</span></div>
+        <div class="dim"><span class="k">Запас по высоте</span><span class="v">10 + 10 мм</span></div>
+        <div class="dim"><span class="k">Раскладка</span><span class="v">${optimal.perRow} × ${optimal.perLayer} × ${v.layers}</span></div>
+      </div>
+    </div>
+  `;
+  document.getElementById('productCompare').innerHTML = compareHTML;
+
+  renderProductViews();
+  renderProductViewsOptimal();
+  renderProduct3D();
+  renderProduct3DOptimal();
+}
+
+function renderProductViews() {
+  const v = productState.variants[0];
+  if (!v) return;
+  try {
+    drawViewFront(v);
+    drawViewSide(v);
+    drawViewTop(v);
+  } catch (e) { console.error('Ошибка отрисовки видов:', e); }
+}
+
+function drawViewFront(v) {
+  const canvas = document.getElementById('viewFront');
+  const ctx = canvas.getContext('2d');
+  const { boxL, boxH } = v;
+  const W = canvas.width, H = canvas.height;
+  const pad = 30;
+  const scale = Math.min((W - 2*pad) / boxL, (H - 2*pad) / boxH);
+
+  ctx.clearRect(0, 0, W, H);
+  const boxW_px = boxL * scale;
+  const boxH_px = boxH * scale;
+  const ox = (W - boxW_px) / 2;
+  const oy = (H - boxH_px) / 2;
+
+  ctx.fillStyle = '#f5f5f5';
+  ctx.fillRect(ox, oy, boxW_px, boxH_px);
+  ctx.strokeStyle = '#1F4E78';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(ox, oy, boxW_px, boxH_px);
+
+  const prodPx = v.bl * scale;
+  const prodPz = v.bh * scale;
+  const freeX = (v.boxL - v.groupL) / 2;
+  const freeZ = (v.boxH - v.groupH) / 2;
+  const startX = ox + freeX * scale;
+  const startZ = oy + freeZ * scale;
+  const fits = v.fits;
+
+  for (let layer = 0; layer < v.layers; layer++) {
+    for (let row = 0; row < v.perRow; row++) {
+      const x = startX + row * prodPx;
+      const y = startZ + (v.layers - 1 - layer) * prodPz;
+      const overflow = (x + prodPx > ox + boxW_px) || (y + prodPz > oy + boxH_px);
+      ctx.fillStyle = overflow ? 'rgba(220, 53, 69, 0.6)' : 'rgba(39, 174, 96, 0.5)';
+      ctx.fillRect(x, y, prodPx, prodPz);
+      ctx.strokeStyle = overflow ? '#c0392b' : '#1e8449';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x, y, prodPx, prodPz);
+    }
+  }
+
+  ctx.fillStyle = '#333';
+  ctx.font = 'bold 11px Arial';
+  ctx.textAlign = 'center';
+  ctx.fillText(`Д: ${boxL} мм`, W/2, H - 10);
+  ctx.save();
+  ctx.translate(15, H/2);
+  ctx.rotate(-Math.PI/2);
+  ctx.fillText(`В: ${boxH} мм`, 0, 0);
+  ctx.restore();
+
+  ctx.fillStyle = fits ? '#27ae60' : '#c0392b';
+  ctx.font = 'bold 12px Arial';
+  ctx.textAlign = 'left';
+  ctx.fillText(fits ? '✓ Влезает' : '✗ Не влезает', 10, 20);
+}
+
+function drawViewSide(v) {
+  const canvas = document.getElementById('viewSide');
+  const ctx = canvas.getContext('2d');
+  const { boxW, boxH } = v;
+  const W = canvas.width, H = canvas.height;
+  const pad = 30;
+  const scale = Math.min((W - 2*pad) / boxW, (H - 2*pad) / boxH);
+
+  ctx.clearRect(0, 0, W, H);
+  const boxW_px = boxW * scale;
+  const boxH_px = boxH * scale;
+  const ox = (W - boxW_px) / 2;
+  const oy = (H - boxH_px) / 2;
+
+  ctx.fillStyle = '#f5f5f5';
+  ctx.fillRect(ox, oy, boxW_px, boxH_px);
+  ctx.strokeStyle = '#1F4E78';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(ox, oy, boxW_px, boxH_px);
+
+  const prodPy = v.bw * scale;
+  const prodPz = v.bh * scale;
+  const freeY = (v.boxW - v.groupW) / 2;
+  const freeZ = (v.boxH - v.groupH) / 2;
+  const startY = ox + freeY * scale;
+  const startZ = oy + freeZ * scale;
+  const fits = v.fits;
+
+  for (let layer = 0; layer < v.layers; layer++) {
+    for (let col = 0; col < v.perLayer; col++) {
+      const x = startY + col * prodPy;
+      const y = startZ + (v.layers - 1 - layer) * prodPz;
+      const overflow = (x + prodPy > ox + boxW_px) || (y + prodPz > oy + boxH_px);
+      ctx.fillStyle = overflow ? 'rgba(220, 53, 69, 0.6)' : 'rgba(39, 174, 96, 0.5)';
+      ctx.fillRect(x, y, prodPy, prodPz);
+      ctx.strokeStyle = overflow ? '#c0392b' : '#1e8449';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x, y, prodPy, prodPz);
+    }
+  }
+
+  ctx.fillStyle = '#333';
+  ctx.font = 'bold 11px Arial';
+  ctx.textAlign = 'center';
+  ctx.fillText(`Ш: ${boxW} мм`, W/2, H - 10);
+  ctx.save();
+  ctx.translate(15, H/2);
+  ctx.rotate(-Math.PI/2);
+  ctx.fillText(`В: ${boxH} мм`, 0, 0);
+  ctx.restore();
+
+  ctx.fillStyle = fits ? '#27ae60' : '#c0392b';
+  ctx.font = 'bold 12px Arial';
+  ctx.textAlign = 'left';
+  ctx.fillText(fits ? '✓ Влезает' : '✗ Не влезает', 10, 20);
+}
+
+function drawViewTop(v) {
+  const canvas = document.getElementById('viewTop');
+  const ctx = canvas.getContext('2d');
+  const { boxL, boxW } = v;
+  const W = canvas.width, H = canvas.height;
+  const pad = 30;
+  const scale = Math.min((W - 2*pad) / boxL, (H - 2*pad) / boxW);
+
+  ctx.clearRect(0, 0, W, H);
+  const boxL_px = boxL * scale;
+  const boxW_px = boxW * scale;
+  const ox = (W - boxL_px) / 2;
+  const oy = (H - boxW_px) / 2;
+
+  ctx.fillStyle = '#f5f5f5';
+  ctx.fillRect(ox, oy, boxL_px, boxW_px);
+  ctx.strokeStyle = '#1F4E78';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(ox, oy, boxL_px, boxW_px);
+
+  const prodPx = v.bl * scale;
+  const prodPy = v.bw * scale;
+  const freeX = (v.boxL - v.groupL) / 2;
+  const freeY = (v.boxW - v.groupW) / 2;
+  const startX = ox + freeX * scale;
+  const startY = oy + freeY * scale;
+  const fits = v.fits;
+
+  for (let row = 0; row < v.perRow; row++) {
+    for (let col = 0; col < v.perLayer; col++) {
+      const x = startX + row * prodPx;
+      const y = startY + col * prodPy;
+      const overflow = (x + prodPx > ox + boxL_px) || (y + prodPy > oy + boxW_px);
+      ctx.fillStyle = overflow ? 'rgba(220, 53, 69, 0.6)' : 'rgba(39, 174, 96, 0.5)';
+      ctx.fillRect(x, y, prodPx, prodPy);
+      ctx.strokeStyle = overflow ? '#c0392b' : '#1e8449';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x, y, prodPx, prodPy);
+    }
+  }
+
+  ctx.fillStyle = '#333';
+  ctx.font = 'bold 11px Arial';
+  ctx.textAlign = 'center';
+  ctx.fillText(`Д: ${boxL} мм`, W/2, H - 10);
+  ctx.fillText(`Ш: ${boxW} мм`, 10, H/2);
+
+  ctx.fillStyle = fits ? '#27ae60' : '#c0392b';
+  ctx.font = 'bold 12px Arial';
+  ctx.textAlign = 'left';
+  ctx.fillText(fits ? '✓ Влезает' : '✗ Не влезает', 10, 20);
+}
+
+// ==== 3D МОДЕЛЬ (текущая) ====
+function renderProduct3D() {
+  const v = productState.variants[0];
+  if (!v) return;
+
+  const canvas = document.getElementById('threeProductCanvas');
+  const wrap = canvas.parentElement;
+  if (!wrap || wrap.clientWidth === 0) return;
+
+  canvas.width = wrap.clientWidth;
+  canvas.height = wrap.clientHeight;
+
+  if (productState.threeRenderer) {
+    productState.threeRenderer.dispose();
+    productState.threeRenderer = null;
+  }
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(45, canvas.width / canvas.height, 1, 50000);
+  camera.up.set(0, 0, 1);
+
+  const renderer = new THREE.WebGLRenderer({
+    canvas: canvas, antialias: true, preserveDrawingBuffer: true, alpha: true
+  });
+  renderer.setSize(canvas.width, canvas.height);
+  renderer.setPixelRatio(window.devicePixelRatio);
+
+  scene.add(new THREE.AmbientLight(0xffffff, 0.75));
+  const dl = new THREE.DirectionalLight(0xffffff, 0.5);
+  dl.position.set(1, -1, 1);
+  scene.add(dl);
+
+  const { boxL, boxW, boxH } = v;
+
+  const boxGeo = new THREE.BoxGeometry(boxL, boxW, boxH);
+  const boxMat = new THREE.MeshLambertMaterial({
+    color: 0x1F4E78, transparent: true, opacity: 0.15, side: THREE.DoubleSide
+  });
+  const boxMesh = new THREE.Mesh(boxGeo, boxMat);
+  boxMesh.position.set(boxL/2, boxW/2, boxH/2);
+  scene.add(boxMesh);
+
+  const boxEdges = new THREE.EdgesGeometry(boxGeo);
+  const boxLine = new THREE.LineSegments(boxEdges,
+    new THREE.LineBasicMaterial({ color: 0x1F4E78, linewidth: 2 }));
+  boxLine.position.copy(boxMesh.position);
+  scene.add(boxLine);
+
+  const prodPx = v.bl, prodPy = v.bw, prodPz = v.bh;
+  const freeX = (boxL - v.groupL) / 2;
+  const freeY = (boxW - v.groupW) / 2;
+  const freeZ = (boxH - v.groupH) / 2;
+  const startX = freeX, startY = freeY, startZ = freeZ;
+
+  for (let layer = 0; layer < v.layers; layer++) {
+    for (let row = 0; row < v.perRow; row++) {
+      for (let col = 0; col < v.perLayer; col++) {
+        const px = startX + row * prodPx;
+        const py = startY + col * prodPy;
+        const pz = startZ + layer * prodPz;
+        const overflow = (px + prodPx > boxL) || (py + prodPy > boxW) || (pz + prodPz > boxH);
+
+        const geo = new THREE.BoxGeometry(prodPx, prodPy, prodPz);
+        const mat = new THREE.MeshLambertMaterial({
+          color: overflow ? 0xc0392b : 0x27ae60,
+          transparent: true, opacity: 0.85
+        });
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.position.set(px + prodPx/2, py + prodPy/2, pz + prodPz/2);
+        scene.add(mesh);
+
+        const edges = new THREE.EdgesGeometry(geo);
+        const line = new THREE.LineSegments(edges,
+          new THREE.LineBasicMaterial({ color: overflow ? 0x7b241c : 0x1e8449 }));
+        line.position.copy(mesh.position);
+        scene.add(line);
+      }
+    }
+  }
+
+  const center = new THREE.Vector3(boxL/2, boxW/2, boxH/2);
+  const radius = Math.max(boxL, boxW, boxH) * 1.4;
+  let theta = Math.PI / 4;
+  let phi = Math.PI / 3;
+
+  function updateCamera() {
+    camera.position.set(
+      center.x + radius * Math.sin(phi) * Math.cos(theta),
+      center.y + radius * Math.sin(phi) * Math.sin(theta),
+      center.z + radius * Math.cos(phi)
+    );
+    camera.lookAt(center);
+  }
+  updateCamera();
+
+  let isDragging = false, prevX = 0, prevY = 0;
+  canvas.addEventListener('mousedown', e => {
+    isDragging = true; prevX = e.clientX; prevY = e.clientY;
+  });
+  window.addEventListener('mouseup', () => isDragging = false);
+  window.addEventListener('mousemove', e => {
+    if (!isDragging) return;
+    theta -= (e.clientX - prevX) * 0.008;
+    phi -= (e.clientY - prevY) * 0.008;
+    phi = Math.max(0.15, Math.min(Math.PI - 0.15, phi));
+    prevX = e.clientX; prevY = e.clientY;
+    updateCamera();
+  });
+  canvas.addEventListener('wheel', e => {
+    e.preventDefault();
+    const s = e.deltaY > 0 ? 1.1 : 0.9;
+    camera.position.sub(center).multiplyScalar(s).add(center);
+    camera.lookAt(center);
+  }, { passive: false });
+
+  productState.threeRenderer = renderer;
+  productState.threeScene = scene;
+  productState.threeCamera = camera;
+
+  function animate() {
+    if (productState.threeRenderer !== renderer) return;
+    requestAnimationFrame(animate);
+    renderer.render(scene, camera);
+  }
+  animate();
+}
+
+// ============================================================
+// ОПТИМАЛЬНЫЕ ВИДЫ
+// ============================================================
+function renderProductViewsOptimal() {
+  const v = productState.variants[0];
+  if (!v) return;
+
+  const optimal = productState.optimal;
+  const vOpt = {
+    ...v,
+    boxL: optimal.L,
+    boxW: optimal.W,
+    boxH: optimal.H,
+    fits: true,
+    hasOverflow: false,
+  };
+
+  drawViewFrontOpt(vOpt);
+  drawViewSideOpt(vOpt);
+  drawViewTopOpt(vOpt);
+}
+
+function drawViewFrontOpt(v) {
+  const canvas = document.getElementById('viewFrontOpt');
+  const ctx = canvas.getContext('2d');
+  const { boxL, boxH } = v;
+  const W = canvas.width, H = canvas.height;
+  const pad = 30;
+  const scale = Math.min((W - 2*pad) / boxL, (H - 2*pad) / boxH);
+
+  ctx.clearRect(0, 0, W, H);
+  const boxW_px = boxL * scale;
+  const boxH_px = boxH * scale;
+  const ox = (W - boxW_px) / 2;
+  const oy = (H - boxH_px) / 2;
+
+  ctx.fillStyle = '#f0fdf4';
+  ctx.fillRect(ox, oy, boxW_px, boxH_px);
+  ctx.strokeStyle = '#27ae60';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(ox, oy, boxW_px, boxH_px);
+
+  const prodPx = v.bl * scale;
+  const prodPz = v.bh * scale;
+  const startX = ox + 10 * scale;
+  const startZ = oy + 10 * scale;
+
+  for (let layer = 0; layer < v.layers; layer++) {
+    for (let row = 0; row < v.perRow; row++) {
+      const x = startX + row * prodPx;
+      const y = startZ + (v.layers - 1 - layer) * prodPz;
+      ctx.fillStyle = 'rgba(39, 174, 96, 0.5)';
+      ctx.fillRect(x, y, prodPx, prodPz);
+      ctx.strokeStyle = '#1e8449';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x, y, prodPx, prodPz);
+    }
+  }
+
+  ctx.fillStyle = '#333';
+  ctx.font = 'bold 11px Arial';
+  ctx.textAlign = 'center';
+  ctx.fillText(`Д: ${boxL} мм`, W/2, H - 10);
+  ctx.save();
+  ctx.translate(15, H/2);
+  ctx.rotate(-Math.PI/2);
+  ctx.fillText(`В: ${boxH} мм`, 0, 0);
+  ctx.restore();
+
+  ctx.fillStyle = '#27ae60';
+  ctx.font = 'bold 12px Arial';
+  ctx.textAlign = 'left';
+  ctx.fillText('✓ Оптимально', 10, 20);
+}
+
+function drawViewSideOpt(v) {
+  const canvas = document.getElementById('viewSideOpt');
+  const ctx = canvas.getContext('2d');
+  const { boxW, boxH } = v;
+  const W = canvas.width, H = canvas.height;
+  const pad = 30;
+  const scale = Math.min((W - 2*pad) / boxW, (H - 2*pad) / boxH);
+
+  ctx.clearRect(0, 0, W, H);
+  const boxW_px = boxW * scale;
+  const boxH_px = boxH * scale;
+  const ox = (W - boxW_px) / 2;
+  const oy = (H - boxH_px) / 2;
+
+  ctx.fillStyle = '#f0fdf4';
+  ctx.fillRect(ox, oy, boxW_px, boxH_px);
+  ctx.strokeStyle = '#27ae60';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(ox, oy, boxW_px, boxH_px);
+
+  const prodPy = v.bw * scale;
+  const prodPz = v.bh * scale;
+  const startY = ox + 10 * scale;
+  const startZ = oy + 10 * scale;
+
+  for (let layer = 0; layer < v.layers; layer++) {
+    for (let col = 0; col < v.perLayer; col++) {
+      const x = startY + col * prodPy;
+      const y = startZ + (v.layers - 1 - layer) * prodPz;
+      ctx.fillStyle = 'rgba(39, 174, 96, 0.5)';
+      ctx.fillRect(x, y, prodPy, prodPz);
+      ctx.strokeStyle = '#1e8449';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x, y, prodPy, prodPz);
+    }
+  }
+
+  ctx.fillStyle = '#333';
+  ctx.font = 'bold 11px Arial';
+  ctx.textAlign = 'center';
+  ctx.fillText(`Ш: ${boxW} мм`, W/2, H - 10);
+  ctx.save();
+  ctx.translate(15, H/2);
+  ctx.rotate(-Math.PI/2);
+  ctx.fillText(`В: ${boxH} мм`, 0, 0);
+  ctx.restore();
+
+  ctx.fillStyle = '#27ae60';
+  ctx.font = 'bold 12px Arial';
+  ctx.textAlign = 'left';
+  ctx.fillText('✓ Оптимально', 10, 20);
+}
+
+function drawViewTopOpt(v) {
+  const canvas = document.getElementById('viewTopOpt');
+  const ctx = canvas.getContext('2d');
+  const { boxL, boxW } = v;
+  const W = canvas.width, H = canvas.height;
+  const pad = 30;
+  const scale = Math.min((W - 2*pad) / boxL, (H - 2*pad) / boxW);
+
+  ctx.clearRect(0, 0, W, H);
+  const boxL_px = boxL * scale;
+  const boxW_px = boxW * scale;
+  const ox = (W - boxL_px) / 2;
+  const oy = (H - boxW_px) / 2;
+
+  ctx.fillStyle = '#f0fdf4';
+  ctx.fillRect(ox, oy, boxL_px, boxW_px);
+  ctx.strokeStyle = '#27ae60';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(ox, oy, boxL_px, boxW_px);
+
+  const prodPx = v.bl * scale;
+  const prodPy = v.bw * scale;
+  const startX = ox + 10 * scale;
+  const startY = oy + 10 * scale;
+
+  for (let row = 0; row < v.perRow; row++) {
+    for (let col = 0; col < v.perLayer; col++) {
+      const x = startX + row * prodPx;
+      const y = startY + col * prodPy;
+      ctx.fillStyle = 'rgba(39, 174, 96, 0.5)';
+      ctx.fillRect(x, y, prodPx, prodPy);
+      ctx.strokeStyle = '#1e8449';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x, y, prodPx, prodPy);
+    }
+  }
+
+  ctx.fillStyle = '#333';
+  ctx.font = 'bold 11px Arial';
+  ctx.textAlign = 'center';
+  ctx.fillText(`Д: ${boxL} мм`, W/2, H - 10);
+  ctx.fillText(`Ш: ${boxW} мм`, 10, H/2);
+
+  ctx.fillStyle = '#27ae60';
+  ctx.font = 'bold 12px Arial';
+  ctx.textAlign = 'left';
+  ctx.fillText('✓ Оптимально', 10, 20);
+}
+
+// ============================================================
+// ОПТИМАЛЬНАЯ 3D-МОДЕЛЬ
+// ============================================================
+let threeOptRenderer = null;
+let threeOptScene = null;
+let threeOptCamera = null;
+
+function renderProduct3DOptimal() {
+  const v = productState.variants[0];
+  if (!v) return;
+
+  const optimal = productState.optimal;
+  const boxL = optimal.L, boxW = optimal.W, boxH = optimal.H;
+
+  const canvas = document.getElementById('threeOptCanvas');
+  const wrap = canvas.parentElement;
+  if (!wrap || wrap.clientWidth === 0) return;
+
+  canvas.width = wrap.clientWidth;
+  canvas.height = wrap.clientHeight;
+
+  if (threeOptRenderer) {
+    threeOptRenderer.dispose();
+    threeOptRenderer = null;
+  }
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(45, canvas.width / canvas.height, 1, 50000);
+  camera.up.set(0, 0, 1);
+
+  const renderer = new THREE.WebGLRenderer({
+    canvas: canvas, antialias: true, preserveDrawingBuffer: true, alpha: true
+  });
+  renderer.setSize(canvas.width, canvas.height);
+  renderer.setPixelRatio(window.devicePixelRatio);
+
+  scene.add(new THREE.AmbientLight(0xffffff, 0.75));
+  const dl = new THREE.DirectionalLight(0xffffff, 0.5);
+  dl.position.set(1, -1, 1);
+  scene.add(dl);
+
+  const boxGeo = new THREE.BoxGeometry(boxL, boxW, boxH);
+  const boxMat = new THREE.MeshLambertMaterial({
+    color: 0x27ae60, transparent: true, opacity: 0.15, side: THREE.DoubleSide
+  });
+  const boxMesh = new THREE.Mesh(boxGeo, boxMat);
+  boxMesh.position.set(boxL/2, boxW/2, boxH/2);
+  scene.add(boxMesh);
+
+  const boxEdges = new THREE.EdgesGeometry(boxGeo);
+  const boxLine = new THREE.LineSegments(boxEdges,
+    new THREE.LineBasicMaterial({ color: 0x27ae60, linewidth: 2 }));
+  boxLine.position.copy(boxMesh.position);
+  scene.add(boxLine);
+
+  const prodPx = v.bl, prodPy = v.bw, prodPz = v.bh;
+  const startX = 10, startY = 10, startZ = 10;
+
+  for (let layer = 0; layer < v.layers; layer++) {
+    for (let row = 0; row < v.perRow; row++) {
+      for (let col = 0; col < v.perLayer; col++) {
+        const px = startX + row * prodPx;
+        const py = startY + col * prodPy;
+        const pz = startZ + layer * prodPz;
+
+        const geo = new THREE.BoxGeometry(prodPx, prodPy, prodPz);
+        const mat = new THREE.MeshLambertMaterial({
+          color: 0x27ae60, transparent: true, opacity: 0.85
+        });
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.position.set(px + prodPx/2, py + prodPy/2, pz + prodPz/2);
+        scene.add(mesh);
+
+        const edges = new THREE.EdgesGeometry(geo);
+        const line = new THREE.LineSegments(edges,
+          new THREE.LineBasicMaterial({ color: 0x1e8449 }));
+        line.position.copy(mesh.position);
+        scene.add(line);
+      }
+    }
+  }
+
+  const center = new THREE.Vector3(boxL/2, boxW/2, boxH/2);
+  const radius = Math.max(boxL, boxW, boxH) * 1.4;
+  let theta = Math.PI / 4;
+  let phi = Math.PI / 3;
+
+  function updateCamera() {
+    camera.position.set(
+      center.x + radius * Math.sin(phi) * Math.cos(theta),
+      center.y + radius * Math.sin(phi) * Math.sin(theta),
+      center.z + radius * Math.cos(phi)
+    );
+    camera.lookAt(center);
+  }
+  updateCamera();
+
+  let isDragging = false, prevX = 0, prevY = 0;
+  canvas.addEventListener('mousedown', e => {
+    isDragging = true; prevX = e.clientX; prevY = e.clientY;
+  });
+  window.addEventListener('mouseup', () => isDragging = false);
+  window.addEventListener('mousemove', e => {
+    if (!isDragging) return;
+    theta -= (e.clientX - prevX) * 0.008;
+    phi -= (e.clientY - prevY) * 0.008;
+    phi = Math.max(0.15, Math.min(Math.PI - 0.15, phi));
+    prevX = e.clientX; prevY = e.clientY;
+    updateCamera();
+  });
+  canvas.addEventListener('wheel', e => {
+    e.preventDefault();
+    const s = e.deltaY > 0 ? 1.1 : 0.9;
+    camera.position.sub(center).multiplyScalar(s).add(center);
+    camera.lookAt(center);
+  }, { passive: false });
+
+  threeOptRenderer = renderer;
+  threeOptScene = scene;
+  threeOptCamera = camera;
+
+  function animate() {
+    if (threeOptRenderer !== renderer) return;
+    requestAnimationFrame(animate);
+    renderer.render(scene, camera);
+  }
+  animate();
+}
+
+function resetProduct() {
+  document.getElementById('p_prod_l').value = 100;
+  document.getElementById('p_prod_w').value = 80;
+  document.getElementById('p_prod_h').value = 60;
+  document.getElementById('p_per_row').value = 3;
+  document.getElementById('p_per_layer').value = 2;
+  document.getElementById('p_layers').value = 4;
+  document.getElementById('p_box_l').value = 350;
+  document.getElementById('p_box_w').value = 245;
+  document.getElementById('p_box_h').value = 250;
+
+  productState = {
+    prodL: 0, prodW: 0, prodH: 0,
+    perRow: 0, perLayer: 0, layers: 0,
+    boxL: 0, boxW: 0, boxH: 0,
+    variants: [], activeVariant: 0,
+    options: [], optimal: null, palletResult: null,
+    threeRenderer: null, threeScene: null, threeCamera: null,
+  };
+
+  document.getElementById('productResult').style.display = 'none';
+  document.getElementById('palletResultCard').style.display = 'none';
+  setStatus('Готово');
+}
+
+// ============================================================
+// ============  ДИАЛОГ ПАЛЛЕТА  ==============================
+// ============================================================
+function openPalletDialog() {
+  document.getElementById('palletModal').classList.add('active');
+}
+function closePalletDialog() {
+  document.getElementById('palletModal').classList.remove('active');
+}
+function applyPalletDialog() {
+  const pl = parseFloat(document.getElementById('modal_pallet_l').value) || 1200;
+  const pw = parseFloat(document.getElementById('modal_pallet_w').value) || 800;
+  closePalletDialog();
+  calculatePalletFromProduct(pl, pw);
+}
+
+// ============================================================
+// ============  РАСЧЁТ ПАЛЛЕТА ИЗ ПРОДУКТА  =================
+// ============================================================
+function calculatePalletFromProduct(palletL, palletW) {
+  const v = productState.variants[0];
+  if (!v) {
+    alert('Ошибка: сначала рассчитайте укладку продукта.');
+    return;
+  }
+
+  const container = document.getElementById('palletResultContent');
+  document.getElementById('palletResultCard').style.display = 'block';
+
+  const optimal = productState.optimal;
+
+  const currBoxL = productState.boxL;
+  const currBoxW = productState.boxW;
+  const currResult = guillotineScan(palletL, palletW, currBoxL, currBoxW);
+
+  const optBoxL = optimal.L;
+  const optBoxW = optimal.W;
+  const optResult = guillotineScan(palletL, palletW, optBoxL, optBoxW);
+
+  const currentFits = v.fits === true;
+
+  productState.palletResult = {
+    palletL, palletW,
+    currentFits,
+    current: { boxL: currBoxL, boxW: currBoxW, count: currResult.count, ...currResult },
+    optimal: { boxL: optBoxL, boxW: optBoxW, count: optResult.count, ...optResult },
+  };
+
+  const currentAlert = currentFits
+    ? `<div class="alert alert-info" style="margin-bottom:10px;">
+         Паллет: <strong>${palletL} × ${palletW} мм</strong>.
+         Сравнение для <strong>текущего</strong> и <strong>оптимального</strong> короба.
+       </div>`
+    : `<div class="alert alert-danger" style="margin-bottom:10px; font-size:14px;">
+         <strong>⚠ Внимание! Продукт не помещается в короб!</strong><br>
+         Схема для текущего короба показана условно — реально разместить
+         короба на паллете не получится.
+       </div>`;
+
+  container.innerHTML = `
+    ${currentAlert}
+
+    <div class="compare-grid" style="margin-bottom:20px;">
+      <div class="compare-card now" style="${!currentFits ? 'opacity:0.85;' : ''}">
+        <h4>📦 Текущий короб</h4>
+        <div class="dim"><span class="k">Короб (Д×Ш)</span><span class="v">${currBoxL} × ${currBoxW}</span></div>
+        <div class="dim"><span class="k">Коробов в слое</span><span class="v" style="color:#b7791f; font-size:18px;">${currResult.count}</span></div>
+        <div class="dim"><span class="k">Вариант раскроя</span><span class="v">${['A','B','C','D','E','F'][currResult.variant-1]}</span></div>
+        ${!currentFits ? `<div class="dim"><span class="k" style="color:#c0392b; font-weight:600;">⚠ Продукт не помещается</span><span class="v"></span></div>` : ''}
+      </div>
+      <div class="compare-card opt">
+        <h4>✨ Оптимальный короб</h4>
+        <div class="dim"><span class="k">Короб (Д×Ш)</span><span class="v">${optBoxL} × ${optBoxW}</span></div>
+        <div class="dim"><span class="k">Коробов в слое</span><span class="v" style="color:#155724; font-size:18px;">${optResult.count}</span></div>
+        <div class="dim"><span class="k">Вариант раскроя</span><span class="v">${['A','B','C','D','E','F'][optResult.variant-1]}</span></div>
+      </div>
+    </div>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
+      <div>
+        <h4 style="font-size:13px; color:${currentFits ? '#b7791f' : '#c0392b'}; text-align:center; margin-bottom:10px;">
+          Вид слоя — ТЕКУЩИЙ (${currBoxL}×${currBoxW})${!currentFits ? ' — условно' : ''}
+        </h4>
+        <div style="background:${currentFits ? '#fff9f0' : '#ffebee'}; border:1px solid #d0d7de; border-radius:6px; padding:10px; overflow:auto; position:relative;">
+          ${!currentFits ? `
+            <div style="position:absolute; top:8px; left:8px; right:8px; z-index:2;
+                        background:rgba(192,57,43,0.92); color:#fff; padding:8px 10px;
+                        border-radius:5px; font-size:12px; font-weight:600; text-align:center;">
+              ⚠ Продукт не помещается в короб
+            </div>` : ''}
+          <canvas id="palletSchemeCurrent"></canvas>
+        </div>
+      </div>
+      <div>
+        <h4 style="font-size:13px; color:#155724; text-align:center; margin-bottom:10px;">
+          Вид слоя — ОПТИМАЛЬНЫЙ (${optBoxL}×${optBoxW})
+        </h4>
+        <div style="background:#f0fdf4; border:1px solid #d0d7de; border-radius:6px; padding:10px; overflow:auto;">
+          <canvas id="palletSchemeOptimal"></canvas>
+        </div>
+      </div>
+    </div>
+  `;
+
+  setTimeout(() => {
+    drawPalletSchemeOnCanvas('palletSchemeCurrent', palletL, palletW, currBoxL, currBoxW, currResult);
+    drawPalletSchemeOnCanvas('palletSchemeOptimal', palletL, palletW, optBoxL, optBoxW, optResult);
+  }, 50);
+
+  document.getElementById('palletResultCard').scrollIntoView({ behavior: 'smooth' });
+}
+
+function drawPalletSchemeOnCanvas(canvasId, L, W, bl, bw, result) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+
+  const maxW = 480, maxH = 360;
+  const scale = Math.min(maxW / L, maxH / W);
+  const padL = 50, padT = 50, padR = 30, padB = 30;
+  canvas.width = L * scale + padL + padR;
+  canvas.height = W * scale + padT + padB;
+
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = 'white';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.strokeStyle = 'black';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(padL, padT, L * scale, W * scale);
+
+  const positions = getBoxPositionsFromVariant(L, W, bl, bw, result);
+
+  for (const p of positions) {
+    const xp = padL + p.x * scale;
+    const yp = padT + p.y * scale;
+    const wp = p.bl * scale;
+    const hp = p.bw * scale;
+
+    ctx.fillStyle = p.color;
+    ctx.fillRect(xp, yp, wp, hp);
+    ctx.strokeStyle = 'black';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(xp, yp, wp, hp);
+
+    ctx.fillStyle = 'black';
+    ctx.font = 'bold 10px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(`${p.no}`, xp + wp/2, yp + hp/2);
+  }
+
+  ctx.fillStyle = '#C00000';
+  ctx.font = 'bold 12px Arial';
+  ctx.textAlign = 'center';
+  ctx.fillText(`L = ${L} мм`, padL + L*scale/2, padT - 20);
+
+  ctx.save();
+  ctx.translate(padL - 20, padT + W*scale/2);
+  ctx.rotate(-Math.PI/2);
+  ctx.fillText(`W = ${W} мм`, 0, 0);
+  ctx.restore();
+}
+
+function getBoxPositionsFromVariant(L, W, bl, bw, result) {
+  const positions = [];
+  const v = result.variant;
+  const extra = result.extra || {};
+  let n = 0;
+  const perLayer = result.count;
+
+  const C_A = '#C6EFCE', C_R = '#FFEB9C', C_M = '#BDD7EE';
+
+  if (v === 1) {
+    const nr = Math.floor(L/bl), nc = Math.floor(W/bw);
+    const gx = (L - nr*bl)/(nr+1), gy = (W - nc*bw)/(nc+1);
+    for (let r=0;r<nc;r++) for (let c=0;c<nr;c++) {
+      if (n >= perLayer) break;
+      n++;
+      positions.push({x:gx+c*(bl+gx), y:gy+r*(bw+gy), bl, bw, color:C_A, no:n});
+    }
+  } else if (v === 2) {
+    const nr = Math.floor(L/bw), nc = Math.floor(W/bl);
+    const gx = (L - nr*bw)/(nr+1), gy = (W - nc*bl)/(nc+1);
+    for (let r=0;r<nc;r++) for (let c=0;c<nr;c++) {
+      if (n >= perLayer) break;
+      n++;
+      positions.push({x:gx+c*(bw+gx), y:gy+r*(bl+gy), bl:bw, bw:bl, color:C_R, no:n});
+    }
+  } else if (v === 3) {
+    const k = extra.n || 0;
+    const ra = Math.floor(W/bw), rr = Math.floor(W/bl);
+    const cr = Math.floor((L - k*bl)/bw);
+    const tw = k*bl + cr*bw;
+    const gx = (L - tw)/(k + cr + 1);
+    const gyL = (W - ra*bw)/(ra+1);
+    const gyR = (W - rr*bl)/(rr+1);
+    const xRF = gx + k*bl + k*gx;
+    for (let r=0;r<ra;r++) for (let c=0;c<k;c++) {
+      if (n >= perLayer) break;
+      n++;
+      positions.push({x:gx+c*(bl+gx), y:gyL+r*(bw+gyL), bl, bw, color:C_A, no:n});
+    }
+    for (let r=0;r<rr;r++) for (let c=0;c<cr;c++) {
+      if (n >= perLayer) break;
+      n++;
+      positions.push({x:xRF+c*(bw+gx), y:gyR+r*(bl+gyR), bl:bw, bw:bl, color:C_M, no:n});
+    }
+  } else if (v === 4) {
+    const k = extra.m || 0;
+    const rr = Math.floor(W/bl), ra = Math.floor(W/bw);
+    const cr = Math.floor((L - k*bw)/bl);
+    const tw = k*bw + cr*bl;
+    const gx = (L - tw)/(k + cr + 1);
+    const gyL = (W - rr*bl)/(rr+1);
+    const gyR = (W - ra*bw)/(ra+1);
+    const xRF = gx + k*bw + k*gx;
+    for (let r=0;r<rr;r++) for (let c=0;c<k;c++) {
+      if (n >= perLayer) break;
+      n++;
+      positions.push({x:gx+c*(bw+gx), y:gyL+r*(bl+gyL), bl:bw, bw:bl, color:C_R, no:n});
+    }
+    for (let r=0;r<ra;r++) for (let c=0;c<cr;c++) {
+      if (n >= perLayer) break;
+      n++;
+      positions.push({x:xRF+c*(bl+gx), y:gyR+r*(bw+gyR), bl, bw, color:C_A, no:n});
+    }
+  } else if (v === 5) {
+    const k = extra.p || 0;
+    const ca = Math.floor(L/bl), cr = Math.floor(L/bw);
+    const rem = Math.floor((W - k*bw)/bl);
+    const th = k*bw + rem*bl;
+    const gy = (W - th)/(k + rem + 1);
+    const gxT = (L - ca*bl)/(ca+1);
+    const gxB = (L - cr*bw)/(cr+1);
+    const yBF = gy + k*bw + k*gy;
+    for (let r=0;r<k;r++) for (let c=0;c<ca;c++) {
+      if (n >= perLayer) break;
+      n++;
+      positions.push({x:gxT+c*(bl+gxT), y:gy+r*(bw+gy), bl, bw, color:C_A, no:n});
+    }
+    for (let r=0;r<rem;r++) for (let c=0;c<cr;c++) {
+      if (n >= perLayer) break;
+      n++;
+      positions.push({x:gxB+c*(bw+gxB), y:yBF+r*(bl+gy), bl:bw, bw:bl, color:C_M, no:n});
+    }
+  } else {
+    const k = extra.q || 0;
+    const cr = Math.floor(L/bw), ca = Math.floor(L/bl);
+    const rem = Math.floor((W - k*bl)/bw);
+    const th = k*bl + rem*bw;
+    const gy = (W - th)/(k + rem + 1);
+    const gxT = (L - cr*bw)/(cr+1);
+    const gxB = (L - ca*bl)/(ca+1);
+    const yBF = gy + k*bl + k*gy;
+    for (let r=0;r<k;r++) for (let c=0;c<cr;c++) {
+      if (n >= perLayer) break;
+      n++;
+      positions.push({x:gxT+c*(bw+gxT), y:gy+r*(bl+gy), bl:bw, bw:bl, color:C_R, no:n});
+    }
+    for (let r=0;r<rem;r++) for (let c=0;c<ca;c++) {
+      if (n >= perLayer) break;
+      n++;
+      positions.push({x:gxB+c*(bl+gxB), y:yBF+r*(bw+gy), bl, bw, color:C_M, no:n});
+    }
+  }
+  return positions;
+}
+
+// ============================================================
+// ============  ЧАСТЬ 2: КОРОБ НА ПАЛЛЕТЕ  ===================
+// ============================================================
+function guillotineScan(L, W, bl, bw) {
+  const a = Math.floor(L/bl) * Math.floor(W/bw);
+  const b = Math.floor(L/bw) * Math.floor(W/bl);
+  let vc = 0, bn = 0;
+  for (let n = 0; n <= Math.floor(L/bl); n++) {
+    const v = n*Math.floor(W/bw) + Math.floor((L-n*bl)/bw)*Math.floor(W/bl);
+    if (v > vc) { vc = v; bn = n; }
+  }
+  let vd = 0, bm = 0;
+  for (let m = 0; m <= Math.floor(L/bw); m++) {
+    const v = m*Math.floor(W/bl) + Math.floor((L-m*bw)/bl)*Math.floor(W/bw);
+    if (v > vd) { vd = v; bm = m; }
+  }
+  let ve = 0, bp = 0;
+  for (let p = 0; p <= Math.floor(W/bw); p++) {
+    const v = p*Math.floor(L/bl) + Math.floor((W-p*bw)/bl)*Math.floor(L/bw);
+    if (v > ve) { ve = v; bp = p; }
+  }
+  let vf = 0, bq = 0;
+  for (let q = 0; q <= Math.floor(W/bl); q++) {
+    const v = q*Math.floor(L/bw) + Math.floor((W-q*bl)/bw)*Math.floor(L/bl);
+    if (v > vf) { vf = v; bq = q; }
+  }
+  const variants = [a, b, vc, vd, ve, vf];
+  const bestIdx = variants.indexOf(Math.max(...variants)) + 1;
+  const extra = {};
+  if (bestIdx === 3) extra.n = bn;
+  if (bestIdx === 4) extra.m = bm;
+  if (bestIdx === 5) extra.p = bp;
+  if (bestIdx === 6) extra.q = bq;
+  return { count: Math.max(...variants), variant: bestIdx, extra };
+}
+
+function calculatePallet() {
+  const pL = getVal('pallet_l');
+  const pW = getVal('pallet_w');
+  const pH = getVal('pallet_h');
+  const oh = getVal('overhang');
+  const bL = getVal('box_l');
+  const bW = getVal('box_w');
+  const bH = getVal('box_h');
+  const maxH = getVal('max_h');
+
+  const L = pL + 2*oh;
+  const W = pW + 2*oh;
+  const H = maxH - pH;
+
+  const orients = [
+    [bL, bW, bH], [bL, bH, bW],
+    [bW, bL, bH], [bW, bH, bL],
+    [bH, bL, bW], [bH, bW, bL],
+  ];
+
+  let best = null;
+  const allResults = [];
+
+  for (const [bl, bw, bh] of orients) {
+    if (bh <= 0 || bl <= 0 || bw <= 0) continue;
+    const layers = Math.floor(H / bh);
+    if (layers <= 0) continue;
+
+    const r = guillotineScan(L, W, bl, bw);
+    const total = r.count * layers;
+
+    const item = { bl, bw, bh, layers, perLayer: r.count, total, variant: r.variant, extra: r.extra };
+    allResults.push(item);
+    if (!best || total > best.total) best = item;
+  }
+
+  if (!best) {
+    setStatus('Короб не помещается', 'error');
+    return;
+  }
+
+  palletState = { ...best, L, W, allResults, currentLayer: 1 };
+  document.getElementById('palletResultMain').style.display = 'block';
+  document.getElementById('palletScheme').style.display = 'block';
+  document.getElementById('palletSchemeEmpty').style.display = 'none';
+  document.getElementById('palletSchemeControls').style.display = 'flex';
+
+  renderPalletSummary();
+  drawPalletScheme();
+  updateAttachButtonState();
+  setStatus('Готово');
+}
+
+let palletState = null;
+
+function renderPalletSummary() {
+  const b = palletState;
+  const variantNames = {
+    1: 'A: все вдоль',
+    2: 'B: все поперёк',
+    3: `C: ${b.extra.n || 0} колонок вдоль + остаток`,
+    4: `D: ${b.extra.m || 0} колонок поперёк + остаток`,
+    5: `E: ${b.extra.p || 0} рядов вдоль + остаток`,
+    6: `F: ${b.extra.q || 0} рядов поперёк + остаток`,
+  };
+
+  document.getElementById('palletSummary').innerHTML = `
+    <div class="result-grid">
+      <div class="result-item ok">
+        <div class="label">Всего коробов</div>
+        <div class="value">${b.total}</div>
+      </div>
+      <div class="result-item">
+        <div class="label">В слое</div>
+        <div class="value">${b.perLayer}</div>
+      </div>
+      <div class="result-item">
+        <div class="label">Слоёв</div>
+        <div class="value">${b.layers}</div>
+      </div>
+      <div class="result-item">
+        <div class="label">Ориентация короба</div>
+        <div class="value" style="font-size:16px;">${b.bl}×${b.bw}×${b.bh}</div>
+      </div>
+    </div>
+    <div style="margin-top:20px; padding:15px; background:#f8f9fa; border-radius:6px; font-size:13px;">
+      <strong>Вариант раскроя:</strong> ${variantNames[b.variant]}
+    </div>
+  `;
+}
+
+function drawPalletScheme() {
+  const b = palletState;
+  if (!b) return;
+
+  const canvas = document.getElementById('palletScheme');
+  const L = b.L, W = b.W;
+  const scale = 0.5;
+  const padL = 60, padT = 60, padR = 40, padB = 40;
+
+  canvas.width = L*scale + padL + padR;
+  canvas.height = W*scale + padT + padB;
+
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = 'white';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.strokeStyle = 'black';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(padL, padT, L*scale, W*scale);
+
+  const positions = getBoxPositionsFromVariant(L, W, b.bl, b.bw, b);
+  for (const p of positions) {
+    const xp = padL + p.x*scale;
+    const yp = padT + p.y*scale;
+    const wp = p.bl*scale;
+    const hp = p.bw*scale;
+    ctx.fillStyle = p.color;
+    ctx.fillRect(xp, yp, wp, hp);
+    ctx.strokeStyle = 'black';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(xp, yp, wp, hp);
+
+    ctx.fillStyle = 'black';
+    ctx.font = 'bold 11px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(`${p.no} | ${p.bl}x${p.bw}`, xp+wp/2, yp+hp/2);
+  }
+
+  ctx.fillStyle = '#333';
+  ctx.font = '10px Arial';
+  ctx.textAlign = 'center';
+  for (let t = 100; t < L; t += 100) ctx.fillText(t, padL + t*scale, padT - 5);
+  ctx.textAlign = 'right';
+  for (let t = 100; t < W; t += 100) ctx.fillText(t, padL - 5, padT + t*scale + 3);
+
+  ctx.fillStyle = '#C00000';
+  ctx.font = 'bold 14px Arial';
+  ctx.textAlign = 'center';
+  ctx.fillText(`L = ${L} мм`, padL + L*scale/2, padT - 25);
+
+  ctx.save();
+  ctx.translate(padL - 30, padT + W*scale/2);
+  ctx.rotate(-Math.PI/2);
+  ctx.fillText(`W = ${W} мм`, 0, 0);
+  ctx.restore();
+
+  document.getElementById('palletLayerLabel').textContent = 'Раскладка одного слоя';
+  document.getElementById('palletSchemeInfo').textContent = `${b.perLayer} коробов`;
+}
+
+function resetPallet() {
+  document.getElementById('pallet_l').value = 1200;
+  document.getElementById('pallet_w').value = 800;
+  document.getElementById('pallet_h').value = 145;
+  document.getElementById('overhang').value = 0;
+  document.getElementById('box_l').value = 350;
+  document.getElementById('box_w').value = 245;
+  document.getElementById('box_h').value = 170;
+  document.getElementById('box_weight').value = 5;
+  document.getElementById('max_h').value = 1800;
+  document.getElementById('max_weight').value = 1000;
+  document.getElementById('palletResultMain').style.display = 'none';
+  setStatus('Готово');
+}
+
+// ============================================================
+// ЭКСПОРТ СТРАНИЦЫ "ПРОДУКТ В КОРОБ" В PDF
+// ============================================================
+function exportProductPagePDF() {
+  if (!productState.variants || productState.variants.length === 0) {
+    alert('Сначала рассчитайте продукт.');
+    return;
+  }
+
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+  const { boxL, boxW, boxH, prodL, prodW, prodH, perRow, perLayer, layers, optimal } = productState;
+  const v = productState.variants[0];
+  const dateStr = new Date().toLocaleString('ru-RU');
+
+  // --- Шапка текущей укладки ---
+  const canvas1 = drawTextBlockToCanvas({
+    width: 570, height: 230,
+    header: { text: 'ПРОДУКТ В КОРОБЕ — ТЕКУЩАЯ УКЛАДКА', bg: '#1F4E78' },
+    startY: 55,
+    lines: [
+      { text: 'Дата: ' + dateStr, size: 11, color: '#888' },
+      { text: 'Параметры:', size: 12, bold: true, color: '#1F4E78' },
+      { text: `Продукт: ${prodL} × ${prodW} × ${prodH} мм`, size: 11 },
+      { text: `Короб: ${boxL} × ${boxW} × ${boxH} мм`, size: 11 },
+      { text: `Раскладка: ${perRow} × ${perLayer} × ${layers}`, size: 11 },
+      { text: `Ориентация: ${v.name}`, size: 11 },
+      { text: `Группа продукта: ${v.groupL} × ${v.groupW} × ${v.groupH} мм`, size: 11 },
+    ],
+    badges: [
+      v.fits
+        ? { text: '✓ Продукт помещается в короб', bg: '#27ae60', color: '#fff', y: 210, size: 11 }
+        : { text: '✗ Продукт НЕ помещается в короб', bg: '#c0392b', color: '#fff', y: 210, size: 11 }
+    ]
+  });
+  pdf.addImage(canvas1.toDataURL('image/png'), 'PNG', 10, 8, 190, 76.6);
+
+  try {
+    pdf.addImage(document.getElementById('viewFront').toDataURL('image/png'), 'PNG', 10, 95, 60, 52);
+    pdf.addImage(document.getElementById('viewSide').toDataURL('image/png'),  'PNG', 75, 95, 60, 52);
+    pdf.addImage(document.getElementById('viewTop').toDataURL('image/png'),   'PNG', 140, 95, 60, 52);
+  } catch (e) { console.error('Ошибка добавления 2D-видов:', e); }
+
+  const canvas2 = drawTextBlockToCanvas({
+    width: 570, height: 230,
+    header: { text: 'ПРОДУКТ В КОРОБЕ — ОПТИМАЛЬНАЯ УКЛАДКА', bg: '#27ae60' },
+    startY: 55,
+    lines: [
+      { text: 'Дата: ' + dateStr, size: 11, color: '#888' },
+      { text: 'Параметры:', size: 12, bold: true, color: '#27ae60' },
+      { text: `Продукт: ${prodL} × ${prodW} × ${prodH} мм`, size: 11 },
+      { text: `Оптимальный короб: ${optimal.L} × ${optimal.W} × ${optimal.H} мм`, size: 11 },
+      { text: `Раскладка: ${optimal.perRow} × ${optimal.perLayer} × ${layers}`, size: 11 },
+      { text: `Группа продукта: ${optimal.groupL} × ${optimal.groupW} × ${optimal.groupH} мм`, size: 11 },
+    ],
+    badges: [
+      { text: '✓ Оптимальный короб: +10 мм с каждой стороны', bg: '#27ae60', color: '#fff', y: 210, size: 11 }
+    ]
+  });
+  pdf.addImage(canvas2.toDataURL('image/png'), 'PNG', 10, 152, 190, 76.6);
+
+  try {
+    pdf.addImage(document.getElementById('viewFrontOpt').toDataURL('image/png'), 'PNG', 10, 234, 60, 52);
+    pdf.addImage(document.getElementById('viewSideOpt').toDataURL('image/png'),  'PNG', 75, 234, 60, 52);
+    pdf.addImage(document.getElementById('viewTopOpt').toDataURL('image/png'),   'PNG', 140, 234, 60, 52);
+  } catch (e) { console.error('Ошибка добавления 2D-видов (opt):', e); }
+
+  if (productState.palletResult) {
+    pdf.addPage('a4', 'landscape');
+    const pr = productState.palletResult;
+
+    const header3 = drawTextBlockToCanvas({
+      width: 1200, height: 80,
+      header: { text: 'РАСЧЁТ ПАЛЛЕТА (1 СЛОЙ)', bg: '#1F4E78' },
+      startY: 55,
+      lines: [
+        { text: `Паллета: ${pr.palletL} × ${pr.palletW} мм   |   Дата: ${dateStr}`, size: 14, color: '#888' }
+      ]
+    });
+    pdf.addImage(header3.toDataURL('image/png'), 'PNG', 10, 8, 277, 18.5);
+
+    const colY = 30;
+    const titleH = 14;
+    const currentFits = pr.currentFits !== false;
+
+    const titleCurrentLines = [
+      { text: 'ТЕКУЩАЯ РАСКЛАДКА', size: 22, bold: true, color: currentFits ? '#b7791f' : '#c0392b' },
+      { text: `${pr.current.boxL} × ${pr.current.boxW} мм — ${pr.current.count} коробов`, size: 12, color: '#555' }
+    ];
+    if (!currentFits) {
+      titleCurrentLines.push({
+        text: '⚠ Внимание! Продукт не помещается в короб!',
+        size: 14, bold: true, color: '#c0392b'
+      });
+    }
+
+    const titleCurrent = drawTextBlockToCanvas({
+      width: 540, height: currentFits ? 56 : 80,
+      header: null, startY: 12,
+      lines: titleCurrentLines
+    });
+    pdf.addImage(titleCurrent.toDataURL('image/png'), 'PNG', 10, colY, 135, currentFits ? 14 : 20);
+
+    const titleOptimal = drawTextBlockToCanvas({
+      width: 540, height: 56,
+      header: null, startY: 12,
+      lines: [
+        { text: 'ОПТИМАЛЬНАЯ РАСКЛАДКА', size: 22, bold: true, color: '#155724' },
+        { text: `${pr.optimal.boxL} × ${pr.optimal.boxW} мм — ${pr.optimal.count} коробов`, size: 12, color: '#555' }
+      ]
+    });
+    pdf.addImage(titleOptimal.toDataURL('image/png'), 'PNG', 152, colY, 135, 14);
+
+    try {
+      const c1 = document.getElementById('palletSchemeCurrent');
+      if (c1) {
+        const ratio1 = c1.height / c1.width;
+        const w1 = 135, h1 = w1 * ratio1;
+        const extraH = currentFits ? 0 : 6;
+        pdf.addImage(c1.toDataURL('image/png'), 'PNG', 10, colY + titleH + 2 + extraH, w1, Math.min(h1, 140 - extraH));
+      }
+    } catch (e) { console.error(e); }
+    try {
+      const c2 = document.getElementById('palletSchemeOptimal');
+      if (c2) {
+        const ratio2 = c2.height / c2.width;
+        const w2 = 135, h2 = w2 * ratio2;
+        pdf.addImage(c2.toDataURL('image/png'), 'PNG', 152, colY + titleH + 2, w2, Math.min(h2, 140));
+      }
+    } catch (e) { console.error(e); }
+  }
+
+  const totalPages = pdf.getNumberOfPages();
+  for (let i = 1; i <= totalPages; i++) {
+    pdf.setPage(i);
+    const pw = pdf.internal.pageSize.getWidth();
+    const ph = pdf.internal.pageSize.getHeight();
+
+    const footer = drawTextBlockToCanvas({
+      width: 1200, height: 30,
+      header: null, startY: 5,
+      lines: [{ text: 'Сгенерировано калькулятором упаковки', size: 10, color: '#888' }]
+    });
+    pdf.addImage(footer.toDataURL('image/png'), 'PNG', 10, ph - 8, 60, 1.5);
+
+    const pn = drawTextBlockToCanvas({
+      width: 400, height: 30,
+      header: null, startY: 5,
+      lines: [{ text: `Стр. ${i} / ${totalPages}`, size: 10, color: '#888' }]
+    });
+    pdf.addImage(pn.toDataURL('image/png'), 'PNG', pw - 30, ph - 8, 20, 1.5);
+  }
+
+  pdf.save(`Продукт_${new Date().toISOString().slice(0,19).replace(/[:T]/g,'_')}.pdf`);
+}
+
+function exportPalletPagePDF() {
+  if (!palletState) {
+    alert('Сначала рассчитайте паллету.');
+    return;
+  }
+
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  const b = palletState;
+  const dateStr = new Date().toLocaleString('ru-RU');
+
+  const headCanvas = drawTextBlockToCanvas({
+    width: 570, height: 200,
+    header: { text: 'РАСЧЁТ КОРОБОВ НА ПАЛЛЕТЕ', bg: '#1F4E78', bgFitText: true },
+    startY: 55,
+    lines: [
+      { text: 'Дата: ' + dateStr, size: 11, color: '#888' },
+      { text: 'Параметры:', size: 12, bold: true, color: '#1F4E78' },
+      { text: `Паллета (с учётом свеса): ${b.L} × ${b.W} мм`, size: 11 },
+      { text: `Короб: ${b.bl} × ${b.bw} × ${b.bh} мм`, size: 11 },
+      { text: `Коробов в слое: ${b.perLayer}`, size: 11 },
+      { text: `Слоёв: ${b.layers}`, size: 11 },
+    ],
+    badges: [
+      { text: `Итого: ${b.total} коробов (${b.perLayer} × ${b.layers})`, bg: '#27ae60', color: '#fff', y: 178, size: 12 }
+    ]
+  });
+  pdf.addImage(headCanvas.toDataURL('image/png'), 'PNG', 10, 10, 190, 66.6);
+
+  try {
+    const c = document.getElementById('palletScheme');
+    const ratio = c.height / c.width;
+    const w = 135;
+    const h = Math.min(w * ratio, 120);
+    pdf.addImage(c.toDataURL('image/png'), 'PNG', 152, 15, w, h);
+  } catch (e) { console.error('Ошибка при добавлении схемы:', e); }
+
+  const footer = drawTextBlockToCanvas({
+    width: 1200, height: 30,
+    header: null, startY: 5,
+    lines: [{ text: 'Сгенерировано калькулятором упаковки', size: 10, color: '#888' }]
+  });
+  pdf.addImage(footer.toDataURL('image/png'), 'PNG', 10, 200, 60, 1.5);
+
+  pdf.save(`Паллета_${new Date().toISOString().slice(0,19).replace(/[:T]/g,'_')}.pdf`);
+}
+
+// ============================================================
+// ============  ПРОЕКТЫ (localStorage)  ======================
+// ============================================================
+const PROJECTS_KEY = 'packcalc_projects_v1';
+
+let projectsState = { projects: [] };
+let attachMode = null;   // 'existing' | 'new'
+
+// === Загрузка / сохранение ===
+function loadProjects() {
+  try {
+    const raw = localStorage.getItem(PROJECTS_KEY);
+    if (raw) projectsState = JSON.parse(raw);
+    if (!Array.isArray(projectsState.projects)) projectsState.projects = [];
+  } catch (e) {
+    console.error('Ошибка загрузки проектов', e);
+    projectsState = { projects: [] };
+  }
+}
+
+function saveProjects() {
+  try {
+    localStorage.setItem(PROJECTS_KEY, JSON.stringify(projectsState));
+  } catch (e) {
+    console.error('Ошибка сохранения проектов', e);
+    alert('Не удалось сохранить проект: ' + e.message);
+  }
+}
+
+function genId(prefix) {
+  return prefix + '_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+}
+
+// === Определение текущей вкладки ===
+function getCurrentPage() {
+  const active = document.querySelector('.page.active');
+  return active ? active.id : null;
+}
+
+// === Кнопка "Прикрепить" доступна только если есть результат ===
+function updateAttachButtonState() {
+  const btn = document.getElementById('attachBtn');
+  if (!btn) return;
+  const page = getCurrentPage();
+  let enabled = false;
+
+  if (page === 'page-product') {
+    enabled = !!(productState.variants && productState.variants.length > 0);
+  } else if (page === 'page-pallet') {
+    enabled = !!palletState;
+  } else if (page === 'page-delivery') {
+    enabled = !!(deliveryState.lastResult);
+  } else if (page === 'page-projects') {
+    enabled = false;   // на странице проектов прикреплять нечего
+  }
+
+  btn.disabled = !enabled;
+  btn.style.display = (page === 'page-projects') ? 'none' : '';
+}
+
+// === Открытие модалки прикрепления ===
+function openAttachDialog() {
+  const page = getCurrentPage();
+  if (page === 'page-product' && (!productState.variants || !productState.variants.length)) {
+    alert('Сначала рассчитайте продукт.');
+    return;
+  }
+  if (page === 'page-pallet' && !palletState) {
+    alert('Сначала рассчитайте паллету.');
+    return;
+  }
+  if (page === 'page-delivery' && !deliveryState.lastResult) {
+    alert('Сначала рассчитайте доставку.');
+    return;
+  }
+  if (page === 'page-projects') return;
+
+  attachMode = null;
+  document.getElementById('attachStep1').style.display = 'block';
+  document.getElementById('attachStep2').style.display = 'none';
+  document.getElementById('attachStep3').style.display = 'none';
+  document.getElementById('attachConfirmBtn').style.display = 'none';
+  document.getElementById('newProjectClient').value = '';
+  document.getElementById('newProjectName').value = '';
+  document.getElementById('attachModal').classList.add('active');
+}
+
+function closeAttachDialog() {
+  document.getElementById('attachModal').classList.remove('active');
+  attachMode = null;
+}
+
+function attachChooseExisting() {
+  if (projectsState.projects.length === 0) {
+    alert('Нет существующих проектов. Создайте новый.');
+    return;
+  }
+  attachMode = 'existing';
+  document.getElementById('attachStep1').style.display = 'none';
+  document.getElementById('attachStep2').style.display = 'block';
+  document.getElementById('attachStep3').style.display = 'none';
+  document.getElementById('attachConfirmBtn').style.display = 'inline-flex';
+
+  const sel = document.getElementById('attachProjectSelect');
+  sel.innerHTML = projectsState.projects.map(p =>
+    `<option value="${p.id}">${p.client} — ${p.name}</option>`
+  ).join('');
+}
+
+function attachCreateNew() {
+  attachMode = 'new';
+  document.getElementById('attachStep1').style.display = 'none';
+  document.getElementById('attachStep2').style.display = 'none';
+  document.getElementById('attachStep3').style.display = 'block';
+  document.getElementById('attachConfirmBtn').style.display = 'inline-flex';
+  setTimeout(() => document.getElementById('newProjectClient').focus(), 100);
+}
+
+function attachConfirm() {
+  const page = getCurrentPage();
+  let targetProject = null;
+
+  if (attachMode === 'existing') {
+    const id = document.getElementById('attachProjectSelect').value;
+    targetProject = projectsState.projects.find(p => p.id === id);
+    if (!targetProject) { alert('Проект не найден.'); return; }
+  } else if (attachMode === 'new') {
+    const client = document.getElementById('newProjectClient').value.trim();
+    const name = document.getElementById('newProjectName').value.trim();
+    if (!client) { alert('Введите клиента.'); return; }
+    if (!name) { alert('Введите название проекта.'); return; }
+    targetProject = {
+      id: genId('proj'),
+      client, name,
+      created: new Date().toISOString(),
+      entries: [],
+    };
+    projectsState.projects.push(targetProject);
+  } else {
+    return;
+  }
+
+  // === Формируем запись ===
+  const entry = buildEntryForCurrentPage(page);
+  if (!entry) { alert('Не удалось собрать данные расчёта.'); return; }
+
+  targetProject.entries.push(entry);
+  saveProjects();
+
+  closeAttachDialog();
+  renderProjectsList();
+
+  // Небольшое уведомление
+  const btn = document.getElementById('attachBtn');
+  const oldText = btn.textContent;
+  btn.textContent = '✓ Прикреплено';
+  btn.disabled = true;
+  setTimeout(() => {
+    btn.textContent = oldText;
+    updateAttachButtonState();
+  }, 1500);
+
+  setStatus('Прикреплено к проекту «' + targetProject.name + '»');
+}
+
+// === Сборка записи по текущей вкладке ===
+function buildEntryForCurrentPage(page) {
+  const now = new Date().toISOString();
+
+  if (page === 'page-product') {
+    if (!productState.variants || !productState.variants.length) return null;
+    const v = productState.variants[0];
+    const opt = productState.optimal;
+    const fits = v.fits ? 'помещается' : 'НЕ помещается';
+    return {
+      id: genId('entry'),
+      type: 'product',
+      title: `Продукт в короб — ${productState.prodL}×${productState.prodW}×${productState.prodH} мм`,
+      summary: `Короб ${productState.boxL}×${productState.boxW}×${productState.boxH}; ` +
+               `укладка ${v.perRow}×${v.perLayer}×${v.layers}; ${fits}; ` +
+               `опт. короб ${opt.L}×${opt.W}×${opt.H}`,
+      snapshot: {
+        productState: {
+          prodL: productState.prodL, prodW: productState.prodW, prodH: productState.prodH,
+          perRow: productState.perRow, perLayer: productState.perLayer, layers: productState.layers,
+          boxL: productState.boxL, boxW: productState.boxW, boxH: productState.boxH,
+          activeVariant: productState.activeVariant,
+          options: productState.options,
+          optimal: productState.optimal,
+          variants: productState.variants.map(x => ({ ...x })),
+        },
+        palletResult: productState.palletResult || null,
+      },
+      attached: now,
+    };
+  }
+
+  if (page === 'page-pallet') {
+    if (!palletState) return null;
+    const b = palletState;
+    return {
+      id: genId('entry'),
+      type: 'pallet',
+      title: `Короб на паллете — короб ${b.bl}×${b.bw}×${b.bh}`,
+      summary: `Паллета ${b.L}×${b.W}; ${b.perLayer} в слое × ${b.layers} слоёв = ${b.total} коробов`,
+      snapshot: { palletState: { ...b } },
+      attached: now,
+    };
+  }
+
+  if (page === 'page-delivery') {
+    const R = deliveryState.lastResult;
+    if (!R) return null;
+    const best = R.bestIdx >= 0 ? R.tcResults[R.bestIdx] : null;
+    const t = best ? best.tc : null;
+    let summary = t
+      ? `${t.name} — ${best.total} машин${best.total === 1 ? 'а' : (best.total >= 2 && best.total <= 4 ? 'ы' : '')}`
+      : 'нет подходящего ТС';
+    if (R.oversizePlatform) {
+      summary += `; трал ${R.oversizePlatform.length.toFixed(1)}×${R.oversizePlatform.width.toFixed(1)}×${R.oversizePlatform.height.toFixed(1)} м`;
+    }
+    return {
+      id: genId('entry'),
+      type: 'delivery',
+      title: `Расчёт доставки — ${deliveryState.rows.length} поз.`,
+      summary,
+      snapshot: {
+        rows: deliveryState.rows.map(r => ({ ...r })),
+        lastResult: R,
+      },
+      attached: now,
+    };
+  }
+
+  return null;
+}
+
+// === Список проектов ===
+function renderProjectsList() {
+  const container = document.getElementById('projectsList');
+  if (!container) return;
+
+  if (!projectsState.projects.length) {
+    container.innerHTML = `
+      <div class="card" style="text-align:center;padding:40px 20px;color:#aaa;">
+        <div style="font-size:48px;opacity:0.3;margin-bottom:10px;">📁</div>
+        <p>Проектов пока нет.</p>
+        <p style="font-size:12px;">Прикрепите расчёт через кнопку «📎 Прикрепить к проекту» в шапке вкладки.</p>
+      </div>`;
+    return;
+  }
+
+  container.innerHTML = projectsState.projects.map((p, pi) => {
+    const entriesHtml = p.entries.length === 0
+      ? `<div class="entry-empty">Нет прикреплённых расчётов</div>`
+      : p.entries.map((e, ei) => {
+          const typeLabel = e.type === 'product' ? 'Продукт'
+                          : e.type === 'pallet' ? 'Паллета'
+                          : e.type === 'delivery' ? 'Доставка' : '—';
+          const dateStr = new Date(e.attached).toLocaleString('ru-RU');
+          return `
+            <div class="entry-row" onclick="restoreEntry(${pi}, ${ei})">
+              <span class="e-type ${e.type}">${typeLabel}</span>
+              <div style="flex:1;">
+                <div class="e-title">${e.title}</div>
+                <div class="e-summary">${e.summary}</div>
+              </div>
+              <div class="e-date">${dateStr}</div>
+              <button class="e-del" onclick="event.stopPropagation(); removeEntry(${pi}, ${ei})"
+                      title="Удалить расчёт">✕</button>
+            </div>`;
+        }).join('');
+
+    return `
+      <div class="project-card">
+        <div class="project-header" onclick="toggleProject(${pi})">
+          <span class="chev">▶</span>
+          <div>
+            <div class="p-client">${p.client}</div>
+            <div class="p-name">${p.name}</div>
+          </div>
+          <div class="p-date">${new Date(p.created).toLocaleDateString('ru-RU')} · ${p.entries.length} расч.</div>
+          <button class="p-del" onclick="event.stopPropagation(); removeProject(${pi})"
+                  title="Удалить проект">🗑</button>
+        </div>
+        <div class="project-body" id="projBody_${pi}">
+          ${entriesHtml}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function toggleProject(pi) {
+  const header = document.querySelectorAll('.project-header')[pi];
+  const body = document.getElementById('projBody_' + pi);
+  if (!header || !body) return;
+  header.classList.toggle('open');
+  body.classList.toggle('open');
+}
+
+// === Удаление ===
+function removeEntry(pi, ei) {
+  if (!confirm('Удалить этот расчёт из проекта?')) return;
+  projectsState.projects[pi].entries.splice(ei, 1);
+  saveProjects();
+  renderProjectsList();
+}
+
+function removeProject(pi) {
+  const p = projectsState.projects[pi];
+  if (!confirm(`Удалить проект «${p.client} — ${p.name}» со всеми расчётами?`)) return;
+  projectsState.projects.splice(pi, 1);
+  saveProjects();
+  renderProjectsList();
+}
+
+function createEmptyProject() {
+  const client = prompt('Клиент:');
+  if (!client) return;
+  const name = prompt('Название проекта:');
+  if (!name) return;
+  projectsState.projects.push({
+    id: genId('proj'),
+    client: client.trim(),
+    name: name.trim(),
+    created: new Date().toISOString(),
+    entries: [],
+  });
+  saveProjects();
+  renderProjectsList();
+}
+
+function clearAllProjects() {
+  if (!confirm('Удалить ВСЕ проекты и прикреплённые расчёты?')) return;
+  projectsState.projects = [];
+  saveProjects();
+  renderProjectsList();
+}
+
+// === Восстановление ===
+function restoreEntry(pi, ei) {
+  const entry = projectsState.projects[pi]?.entries[ei];
+  if (!entry) return;
+
+  if (entry.type === 'product') {
+    restoreProductEntry(entry);
+  } else if (entry.type === 'pallet') {
+    restorePalletEntry(entry);
+  } else if (entry.type === 'delivery') {
+    restoreDeliveryEntry(entry);
+  }
+}
+
+function restoreProductEntry(entry) {
+  const s = entry.snapshot.productState;
+  if (!s) return;
+
+  // Заполняем форму
+  document.getElementById('p_prod_l').value = s.prodL;
+  document.getElementById('p_prod_w').value = s.prodW;
+  document.getElementById('p_prod_h').value = s.prodH;
+  document.getElementById('p_per_row').value = s.perRow;
+  document.getElementById('p_per_layer').value = s.perLayer;
+  document.getElementById('p_layers').value = s.layers;
+  document.getElementById('p_box_l').value = s.boxL;
+  document.getElementById('p_box_w').value = s.boxW;
+  document.getElementById('p_box_h').value = s.boxH;
+
+  // Восстанавливаем state
+  productState = {
+    prodL: s.prodL, prodW: s.prodW, prodH: s.prodH,
+    perRow: s.perRow, perLayer: s.perLayer, layers: s.layers,
+    boxL: s.boxL, boxW: s.boxW, boxH: s.boxH,
+    variants: s.variants.map(x => ({ ...x })),
+    activeVariant: s.activeVariant || 0,
+    options: s.options || [],
+    optimal: s.optimal,
+    palletResult: entry.snapshot.palletResult || null,
+    threeRenderer: null, threeScene: null, threeCamera: null,
+  };
+
+  // Открываем вкладку «Продукт»
+  switchPage('page-product');
+
+  // Показываем результат
+  document.getElementById('productResult').style.display = 'block';
+  document.getElementById('palletResultCard').style.display =
+    productState.palletResult ? 'block' : 'none';
+
+  renderProductResult();
+  setStatus('Восстановлено из проекта');
+}
+
+function restorePalletEntry(entry) {
+  const s = entry.snapshot.palletState;
+  if (!s) return;
+
+  // Заполняем форму
+  document.getElementById('pallet_l').value = s.L;
+  document.getElementById('pallet_w').value = s.W;
+  document.getElementById('box_l').value = s.bl;
+  document.getElementById('box_w').value = s.bw;
+  document.getElementById('box_h').value = s.bh;
+
+  palletState = { ...s };
+
+  switchPage('page-pallet');
+
+  document.getElementById('palletResultMain').style.display = 'block';
+  document.getElementById('palletScheme').style.display = 'block';
+  document.getElementById('palletSchemeEmpty').style.display = 'none';
+  document.getElementById('palletSchemeControls').style.display = 'flex';
+
+  renderPalletSummary();
+  drawPalletScheme();
+  setStatus('Восстановлено из проекта');
+}
+
+function restoreDeliveryEntry(entry) {
+  const s = entry.snapshot;
+  if (!s) return;
+
+  // Восстанавливаем строки
+  deliveryState.rows = (s.rows || []).map(r => ({ ...r }));
+  if (deliveryState.rows.length === 0) {
+    deliveryState.rows = [];
+    addEquipmentRow();
+  } else {
+    renderEquipmentTable();
+  }
+
+  deliveryState.lastResult = s.lastResult;
+
+  switchPage('page-delivery');
+
+  if (deliveryState.lastResult) {
+    document.getElementById('deliveryResult').style.display = 'block';
+    renderDeliveryResult();
+  }
+  setStatus('Восстановлено из проекта');
+}
+
+// === Смена страницы из JS ===
+function switchPage(pageId) {
+  document.querySelectorAll('.menu-item').forEach(i => {
+    i.classList.toggle('active', i.dataset.page === pageId);
+  });
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  const page = document.getElementById(pageId);
+  if (page) page.classList.add('active');
+  document.getElementById('pageTitle').textContent = pageTitles[pageId] || '';
+  updateAttachButtonState();
+}
+
+// ============================================================
+// СТАРТ
+// ============================================================
+window.addEventListener('DOMContentLoaded', () => {
+  initDeliveryPage();
+});
+</script>
+
+</body>
+</html>
