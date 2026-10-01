@@ -900,6 +900,31 @@
 <script src="https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
 
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import {
+    getFirestore, collection, doc, setDoc, getDocs, deleteDoc
+  } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyCuvAydeyYejD8ekeLniiU4wrC3DeX421Q",
+    authDomain: "calculatorpm-499cd.firebaseapp.com",
+    projectId: "calculatorpm-499cd",
+    storageBucket: "calculatorpm-499cd.firebasestorage.app",
+    messagingSenderId: "1003394519835",
+    appId: "1:1003394519835:web:9e261ef8b057237f59b9be"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+
+  // Прокидываем в глобальную область, чтобы использовать из обычного скрипта
+  window.__fb = { db, collection, doc, setDoc, getDocs, deleteDoc };
+
+  // Сообщаем основному скрипту, что Firebase готов
+  window.dispatchEvent(new Event('firebase-ready'));
+</script>
+
 <script>
 // ============================================================
 // УТИЛИТА: рисуем текстовый блок на canvas для вставки в PDF
@@ -2172,9 +2197,9 @@ function initDeliveryPage() {
   renderRefCategories();
   renderRefTC();
   renderRefMargin();
-  loadProjects();
-  renderProjectsList();
   updateAttachButtonState();
+  // Проекты подгрузятся автоматически, когда Firebase SDK будет готов
+  // (событие 'firebase-ready' в модуле выше)
 }
 
 // ============================================================
@@ -3715,32 +3740,80 @@ function exportPalletPagePDF() {
 // ============================================================
 // ============  ПРОЕКТЫ (localStorage)  ======================
 // ============================================================
-const PROJECTS_KEY = 'packcalc_projects_v1';
+// ============================================================
+// ============  ПРОЕКТЫ (Firestore)  =========================
+// ============================================================
+// Коллекция: projects/{projectId}
+// Документ: { id, client, name, created, entries: [...] }
 
 let projectsState = { projects: [] };
 let attachMode = null;   // 'existing' | 'new'
+let fbReady = false;
 
-// === Загрузка / сохранение ===
-function loadProjects() {
+// === Загрузка всех проектов из Firestore ===
+async function loadProjects() {
+  if (!window.__fb) {
+    console.warn('Firebase не готов');
+    return;
+  }
   try {
-    const raw = localStorage.getItem(PROJECTS_KEY);
-    if (raw) projectsState = JSON.parse(raw);
-    if (!Array.isArray(projectsState.projects)) projectsState.projects = [];
+    const { db, collection, getDocs } = window.__fb;
+    const snap = await getDocs(collection(db, 'projects'));
+    const list = [];
+    snap.forEach(d => {
+      const data = d.data();
+      data.id = d.id;
+      if (!Array.isArray(data.entries)) data.entries = [];
+      list.push(data);
+    });
+    // Сортируем по дате создания — новые сверху
+    list.sort((a, b) => (b.created || '').localeCompare(a.created || ''));
+    projectsState.projects = list;
   } catch (e) {
     console.error('Ошибка загрузки проектов', e);
-    projectsState = { projects: [] };
+    projectsState.projects = [];
   }
 }
 
-function saveProjects() {
+// === Сохранить/обновить ОДИН проект в Firestore ===
+async function saveProjectToFirestore(project) {
+  if (!window.__fb) {
+    alert('Firebase не готов, попробуйте перезагрузить страницу.');
+    return false;
+  }
   try {
-    localStorage.setItem(PROJECTS_KEY, JSON.stringify(projectsState));
+    const { db, doc, setDoc } = window.__fb;
+    // Убираем id из данных — он уже в пути документа
+    const { id, ...payload } = project;
+    await setDoc(doc(db, 'projects', id), payload);
+    return true;
   } catch (e) {
-    console.error('Ошибка сохранения проектов', e);
+    console.error('Ошибка сохранения проекта', e);
     alert('Не удалось сохранить проект: ' + e.message);
+    return false;
   }
 }
 
+// === Удалить проект из Firestore ===
+async function deleteProjectFromFirestore(projectId) {
+  if (!window.__fb) return false;
+  try {
+    const { db, doc, deleteDoc } = window.__fb;
+    await deleteDoc(doc(db, 'projects', projectId));
+    return true;
+  } catch (e) {
+    console.error('Ошибка удаления проекта', e);
+    alert('Не удалось удалить проект: ' + e.message);
+    return false;
+  }
+}
+
+// === Слушаем готовность Firebase ===
+window.addEventListener('firebase-ready', async () => {
+  fbReady = true;
+  await loadProjects();
+  renderProjectsList();
+});
 function genId(prefix) {
   return prefix + '_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
 }
@@ -3830,7 +3903,7 @@ function attachCreateNew() {
   setTimeout(() => document.getElementById('newProjectClient').focus(), 100);
 }
 
-function attachConfirm() {
+async function attachConfirm() {
   const page = getCurrentPage();
   let targetProject = null;
 
@@ -3859,12 +3932,18 @@ function attachConfirm() {
   if (!entry) { alert('Не удалось собрать данные расчёта.'); return; }
 
   targetProject.entries.push(entry);
-  saveProjects();
+
+  // === Сохраняем в Firestore ===
+  const ok = await saveProjectToFirestore(targetProject);
+  if (!ok) {
+    // Откатываем изменение
+    targetProject.entries.pop();
+    return;
+  }
 
   closeAttachDialog();
   renderProjectsList();
 
-  // Небольшое уведомление
   const btn = document.getElementById('attachBtn');
   const oldText = btn.textContent;
   btn.textContent = '✓ Прикреплено';
@@ -4014,41 +4093,50 @@ function toggleProject(pi) {
 }
 
 // === Удаление ===
-function removeEntry(pi, ei) {
+async function removeEntry(pi, ei) {
   if (!confirm('Удалить этот расчёт из проекта?')) return;
-  projectsState.projects[pi].entries.splice(ei, 1);
-  saveProjects();
+  const project = projectsState.projects[pi];
+  project.entries.splice(ei, 1);
+  const ok = await saveProjectToFirestore(project);
+  if (!ok) return;
   renderProjectsList();
 }
 
-function removeProject(pi) {
+async function removeProject(pi) {
   const p = projectsState.projects[pi];
   if (!confirm(`Удалить проект «${p.client} — ${p.name}» со всеми расчётами?`)) return;
+  const ok = await deleteProjectFromFirestore(p.id);
+  if (!ok) return;
   projectsState.projects.splice(pi, 1);
-  saveProjects();
   renderProjectsList();
 }
 
-function createEmptyProject() {
+async function createEmptyProject() {
   const client = prompt('Клиент:');
   if (!client) return;
   const name = prompt('Название проекта:');
   if (!name) return;
-  projectsState.projects.push({
+  const project = {
     id: genId('proj'),
     client: client.trim(),
     name: name.trim(),
     created: new Date().toISOString(),
     entries: [],
-  });
-  saveProjects();
+  };
+  const ok = await saveProjectToFirestore(project);
+  if (!ok) return;
+  projectsState.projects.unshift(project);
   renderProjectsList();
 }
 
-function clearAllProjects() {
-  if (!confirm('Удалить ВСЕ проекты и прикреплённые расчёты?')) return;
+async function clearAllProjects() {
+  if (!confirm('Удалить ВСЕ проекты и прикреплённые расчёты? Это затронет всех пользователей.')) return;
+  if (!confirm('Точно удалить? Действие необратимо.')) return;
+  const ids = projectsState.projects.map(p => p.id);
+  for (const id of ids) {
+    await deleteProjectFromFirestore(id);
+  }
   projectsState.projects = [];
-  saveProjects();
   renderProjectsList();
 }
 
