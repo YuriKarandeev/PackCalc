@@ -2363,7 +2363,7 @@ function selectOrientation(idx) {
   productState.optimal = {
     L: opt.groupL + 20,
     W: opt.groupW + 20,
-    H: opt.groupH + 20,
+    H: opt.groupH + 10,
     groupL: opt.groupL, groupW: opt.groupW, groupH: opt.groupH,
     perRow: opt.perRow, perLayer: opt.perLayer,
   };
@@ -2424,7 +2424,7 @@ function renderProductResult() {
         <div class="dim"><span class="k">Группа продукта</span><span class="v">${optimal.groupL} × ${optimal.groupW} × ${optimal.groupH}</span></div>
         <div class="dim"><span class="k">Запас по длине</span><span class="v">10 + 10 мм</span></div>
         <div class="dim"><span class="k">Запас по ширине</span><span class="v">10 + 10 мм</span></div>
-        <div class="dim"><span class="k">Запас по высоте</span><span class="v">10 + 10 мм</span></div>
+        <div class="dim"><span class="k">Запас по высоте</span><span class="v">10 мм</span></div>
         <div class="dim"><span class="k">Раскладка</span><span class="v">${optimal.perRow} × ${optimal.perLayer} × ${v.layers}</span></div>
       </div>
     </div>
@@ -3600,7 +3600,7 @@ function exportProductPagePDF() {
       { text: `Группа продукта: ${optimal.groupL} × ${optimal.groupW} × ${optimal.groupH} мм`, size: 11 },
     ],
     badges: [
-      { text: '✓ Оптимальный короб: +10 мм с каждой стороны', bg: '#27ae60', color: '#fff', y: 210, size: 11 }
+      { text: '✓ Оптимальный короб: +10 мм по высоте, +20 мм по длине/ширине', bg: '#27ae60', color: '#fff', y: 210, size: 11 }
     ]
   });
   pdf.addImage(canvas2.toDataURL('image/png'), 'PNG', 10, 152, 190, 76.6);
