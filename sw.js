@@ -1,9 +1,8 @@
 // ============================================================
 // Service Worker для PWA "Калькулятор упаковки"
 // ============================================================
-const CACHE_NAME = 'packcalc-v1';
+const CACHE_NAME = 'packcalc-v2';   // ← поднимаем версию
 
-// Что кэшировать сразу при установке
 const PRECACHE_URLS = [
   './',
   './index.html',
@@ -14,7 +13,6 @@ const PRECACHE_URLS = [
   'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js'
 ];
 
-// Установка — кэшируем основные файлы
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME)
@@ -25,7 +23,6 @@ self.addEventListener('install', event => {
   );
 });
 
-// Активация — удаляем старые кэши
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys().then(keys =>
@@ -34,33 +31,44 @@ self.addEventListener('activate', event => {
   );
 });
 
-// Перехват запросов — сначала кэш, потом сеть
 self.addEventListener('fetch', event => {
   const req = event.request;
 
-  // Не кэшируем запросы к Firestore (они должны идти в сеть)
+  // Firestore — только сеть
   if (req.url.includes('firestore.googleapis.com') ||
       req.url.includes('firebaseio.com')) {
     return;
   }
-
-  // POST/PUT/DELETE не кэшируем
   if (req.method !== 'GET') return;
 
+  // HTML и сам SW — сначала сеть, потом кэш
+  const isHTML = req.url.endsWith('/') || req.url.endsWith('index.html');
+  const isSW = req.url.endsWith('sw.js');
+
+  if (isHTML || isSW) {
+    event.respondWith(
+      fetch(req).then(resp => {
+        if (resp && resp.status === 200) {
+          const clone = resp.clone();
+          caches.open(CACHE_NAME).then(c => c.put(req, clone));
+        }
+        return resp;
+      }).catch(() => caches.match(req))
+    );
+    return;
+  }
+
+  // Остальное — сначала кэш, потом сеть
   event.respondWith(
     caches.match(req).then(cached => {
       if (cached) return cached;
       return fetch(req).then(resp => {
-        // Кэшируем успешные GET-запросы
         if (resp && resp.status === 200 && resp.type === 'basic') {
           const clone = resp.clone();
           caches.open(CACHE_NAME).then(c => c.put(req, clone));
         }
         return resp;
-      }).catch(() => {
-        // Если сеть недоступна — ищем в кэше ещё раз
-        return caches.match(req);
-      });
+      }).catch(() => caches.match(req));
     })
   );
 });

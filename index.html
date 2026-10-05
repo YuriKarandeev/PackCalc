@@ -4274,8 +4274,20 @@ let deferredInstallPrompt = null;
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./sw.js')
-      .then(reg => console.log('SW зарегистрирован:', reg.scope))
+      .then(reg => {
+        console.log('SW зарегистрирован:', reg.scope);
+        // Проверяем обновления каждый час
+        setInterval(() => reg.update(), 60 * 60 * 1000);
+      })
       .catch(err => console.warn('SW не зарегистрирован:', err));
+  });
+
+  // Если пришёл новый SW — перезагружаем страницу
+  let refreshing = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (refreshing) return;
+    refreshing = true;
+    window.location.reload();
   });
 }
 
